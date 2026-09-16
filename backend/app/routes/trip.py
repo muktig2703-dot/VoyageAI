@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.agents.orchestrator import orchestrate_trip
 from app.database import get_db
 from app.models.trip import Trip
 from app.schemas.trip import TripCreate
+from app.agents.orchestrator import orchestrate_trip
 
 router = APIRouter(prefix="/trip", tags=["Trip"])
 
@@ -37,5 +38,8 @@ def create_trip(data: TripCreate, db: Session = Depends(get_db)):
 @router.get("/{trip_id}")
 def get_trip(trip_id: str, db: Session = Depends(get_db)):
     trip = db.get(Trip, trip_id)
+
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
 
     return trip

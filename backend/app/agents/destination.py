@@ -1,8 +1,20 @@
+
 def destination_agent(data):
-    return {
-        "must_visit": [
+    destination = data["destination"]
+
+    recommendations = {
+        "Goa": [
             "Baga Beach",
             "Chapora Fort",
             "Anjuna Market"
+        ],
+        "Manali": [
+            "Solang Valley",
+            "Old Manali",
+            "Hidimba Temple"
         ]
+    }
+
+    return {
+        "must_visit": recommendations.get(destination, [])
     }
