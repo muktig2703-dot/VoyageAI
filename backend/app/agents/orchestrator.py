@@ -1,32 +1,29 @@
-
-from app.agents.destination import destination_agent
-from app.agents.accommodation import accommodation_agent
-from app.agents.transport import transport_agent
-from app.agents.food import food_agent
-from app.agents.activity import activity_agent
-from app.agents.budget import budget_agent
+from app.agents.workflow import travel_graph
 
 
 def orchestrate_trip(data):
-    destination = destination_agent(data)
+    state = {
+    "data": data,
 
-    stay = accommodation_agent(data)
+    "itinerary": {},
 
-    transport = transport_agent(data)
+    "review": {},
 
-    food = food_agent(data)
-
-    activity = activity_agent(data)
-
-    budget = budget_agent(data)
-
-    itinerary = {
-        "destination": destination,
-        "accommodation": stay,
-        "transport": transport,
-        "food": food,
-        "activities": activity,
-        "budget": budget
+    "progress": {
+        "destination": "pending",
+        "food": "pending",
+        "accommodation": "pending",
+        "transport": "pending",
+        "activity": "pending",
+        "budget": "pending",
+        "critic": "pending"
     }
+}
 
-    return itinerary
+    result = travel_graph.invoke(state)
+
+    return {
+    "itinerary": result["itinerary"],
+    "review": result["review"],
+    "progress": result["progress"]
+}

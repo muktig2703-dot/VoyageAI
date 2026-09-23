@@ -6,7 +6,6 @@ import app.models
 
 from app.routes.health import router as health_router
 from app.routes.trip import router as trip_router
-
 # Create database tables
 Base.metadata.create_all(bind=engine)
 

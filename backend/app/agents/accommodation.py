@@ -1,18 +1,26 @@
+from app.services.llm import llm
 
 def accommodation_agent(data):
-    budget = data["budget"]
+    prompt = f"""
+    You are an accommodation planning expert.
 
-    if budget < 10000:
-        stay = "Budget Hostel"
-        price = 700
-    elif budget < 30000:
-        stay = "3-Star Hotel"
-        price = 1800
-    else:
-        stay = "Luxury Resort"
-        price = 5000
+    Destination: {data['destination']}
+    Budget: ₹{data['budget']}
+    Travel Style: {data['travel_style']}
+    Trip Dates: {data['start_date']} to {data['end_date']}
+    Interests: {", ".join(data['interests'])}
+
+    Recommend:
+    - Best accommodation type
+    - 3 suggested areas to stay
+    - Estimated nightly cost
+    - Why it suits this traveler
+
+    Return the response in a structured format.
+    """
+
+    response = llm.invoke(prompt)
 
     return {
-        "recommended_stay": stay,
-        "estimated_per_night": price
+        "accommodation_plan": response.content
     }
