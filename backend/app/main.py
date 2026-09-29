@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.config import settings
 from app.database import Base, engine
 import app.models
-
+from fastapi.middleware.cors import CORSMiddleware
 from app.routes.health import router as health_router
 from app.routes.trip import router as trip_router
 from app.routes.auth import router as auth_router
@@ -15,6 +15,17 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="AI-powered Multi-Agent Travel Planner"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Register routes AFTER app is created
