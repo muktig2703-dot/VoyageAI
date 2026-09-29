@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GOOGLE_MAPS_API_KEY: str = ""
     OPENWEATHER_API_KEY: str = ""
-    TAVILY_API_KEY: str = ""   # ← Add this line
+    TAVILY_API_KEY: str = ""
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     model_config = SettingsConfigDict(env_file=".env")
 

@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root{
+  --card:rgba(15,23,42,.75);
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  overflow-x:hidden;
+  font-family:Inter,sans-serif;
+}
+
+.glass{
+  background:var(--card);
+  backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.08);
+}
+html {
+  scroll-behavior: smooth;
+}
+
+section[id],
+footer[id] {
+  scroll-margin-top: 120px;
+}

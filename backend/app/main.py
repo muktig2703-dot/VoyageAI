@@ -6,6 +6,7 @@ import app.models
 
 from app.routes.health import router as health_router
 from app.routes.trip import router as trip_router
+from app.routes.auth import router as auth_router
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -19,6 +20,7 @@ app = FastAPI(
 # Register routes AFTER app is created
 app.include_router(health_router)
 app.include_router(trip_router)
+app.include_router(auth_router)
 
 
 @app.get("/")
