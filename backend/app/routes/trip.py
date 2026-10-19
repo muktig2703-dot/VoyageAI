@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.trip import TripCreate
 from app.agents.orchestrator import orchestrate_trip
 from app.dependencies import get_current_user
-
+from uuid import UUID
 
 router = APIRouter(prefix="/trip", tags=["Trip"])
 
@@ -119,16 +119,25 @@ def create_trip(
     }
 
 
+
 @router.get("/{trip_id}")
 def get_trip(
     trip_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        parsed_trip_id = UUID(trip_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
     trip = (
         db.query(Trip)
         .filter(
-            Trip.id == trip_id,
+            Trip.id == parsed_trip_id,
             Trip.user_id == current_user.id,
         )
         .first()
