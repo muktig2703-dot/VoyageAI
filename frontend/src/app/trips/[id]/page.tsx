@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,15 +9,13 @@ import {
   Wallet,
   Loader2,
   Sparkles,
-  Clock,
   Compass,
   Hotel,
   Utensils,
   Car,
-  CheckCircle2,
-  Plane,
   Mountain,
-  ChevronRight,
+  ChevronDown,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -37,8 +34,43 @@ interface Trip {
   itinerary: Record<string, unknown> | null;
 }
 
-function formatLabel(value: string): string {
-  return value
+const photos = [
+  {
+    title: "Explore",
+    subtitle: "Places worth discovering",
+    image:
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=85",
+    icon: Camera,
+    terms: /activity|attraction|sightseeing|place|explor|destination/i,
+  },
+  {
+    title: "Local flavours",
+    subtitle: "Taste something memorable",
+    image:
+      "https://images.unsplash.com/photo-1547595628-c61a29f496f0?auto=format&fit=crop&w=900&q=85",
+    icon: Utensils,
+    terms: /food|restaurant|dining|culinary|cuisine/i,
+  },
+  {
+    title: "Nature & adventure",
+    subtitle: "Get out and experience it",
+    image:
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=900&q=85",
+    icon: Mountain,
+    terms: /adventure|nature|hiking|mountain|outdoor|desert/i,
+  },
+  {
+    title: "Culture & heritage",
+    subtitle: "Discover the local story",
+    image:
+      "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=85",
+    icon: Compass,
+    terms: /culture|heritage|history|temple|museum|architecture/i,
+  },
+];
+
+function labelOf(key: string) {
+  return key
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
@@ -46,51 +78,78 @@ function formatLabel(value: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatDate(date: string): string {
-  if (!date) return "Not specified";
+function formatDate(value: string) {
+  if (!value) return "Not set";
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
 
-  const parsed = new Date(`${date.slice(0, 10)}T12:00:00`);
-
-  if (Number.isNaN(parsed.getTime())) return date;
-
-  return parsed.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 }
 
-function getIcon(key: string) {
+function textOf(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+
+  if (Array.isArray(value)) {
+    return value.map(textOf).filter(Boolean).join(" · ");
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `${labelOf(key)}: ${textOf(item)}`)
+      .filter((item) => !item.endsWith(": "))
+      .join("\n");
+  }
+
+  return "";
+}
+
+function getSummary(itinerary: Record<string, unknown> | null) {
+  if (!itinerary) return "";
+
+  const entry = Object.entries(itinerary).find(([key]) =>
+    /trip_summary|summary|overview|introduction/i.test(key)
+  );
+
+  return entry ? textOf(entry[1]) : "";
+}
+
+function getSectionIcon(key: string) {
   const value = key.toLowerCase();
 
-  if (value.includes("accommodation") || value.includes("hotel") || value.includes("stay"))
-    return Hotel;
-
-  if (value.includes("transport") || value.includes("arrival") || value.includes("travel"))
-    return Plane;
-
-  if (value.includes("food") || value.includes("restaurant") || value.includes("dining"))
-    return Utensils;
-
-  if (value.includes("budget") || value.includes("cost") || value.includes("expense"))
-    return Wallet;
-
-  if (value.includes("activity") || value.includes("adventure") || value.includes("attraction"))
-    return Mountain;
-
-  if (value.includes("day") || value.includes("schedule") || value.includes("itinerary"))
-    return CalendarDays;
-
-  if (value.includes("destination") || value.includes("place") || value.includes("area"))
-    return MapPin;
-
-  if (value.includes("transport") || value.includes("car"))
-    return Car;
+  if (/accommodation|hotel|stay|lodging/.test(value)) return Hotel;
+  if (/transport|arrival|departure|transfer/.test(value)) return Car;
+  if (/food|restaurant|dining/.test(value)) return Utensils;
+  if (/budget|cost|expense/.test(value)) return Wallet;
+  if (/day|schedule|itinerary|activity/.test(value)) return CalendarDays;
+  if (/destination|place|area/.test(value)) return MapPin;
 
   return Compass;
 }
 
-function isEmpty(value: unknown): boolean {
+function getHighlights(interests: string[]) {
+  const chosen = photos.filter((photo) =>
+    interests.some((interest) => photo.terms.test(interest))
+  );
+
+  const results = [...chosen];
+
+  for (const photo of photos) {
+    if (results.length >= 3) break;
+    if (!results.some((item) => item.title === photo.title)) {
+      results.push(photo);
+    }
+  }
+
+  return results.slice(0, 3);
+}
+
+function isBlank(value: unknown): boolean {
   return (
     value === null ||
     value === undefined ||
@@ -99,28 +158,12 @@ function isEmpty(value: unknown): boolean {
   );
 }
 
-function isDateKey(key: string): boolean {
-  return /date|check.?in|check.?out/i.test(key);
-}
-
-function ValueView({
-  value,
-  depth = 0,
-}: {
-  value: unknown;
-  depth?: number;
-}) {
-  if (isEmpty(value)) {
-    return (
-      <p className="text-sm text-stone-400">
-        Details coming soon.
-      </p>
-    );
-  }
+function VisualValue({ value }: { value: unknown }) {
+  if (isBlank(value)) return null;
 
   if (typeof value === "string" || typeof value === "number") {
     return (
-      <p className="whitespace-pre-line text-sm leading-7 text-stone-600">
+      <p className="whitespace-pre-line text-sm leading-6 text-slate-600">
         {String(value)}
       </p>
     );
@@ -128,41 +171,24 @@ function ValueView({
 
   if (typeof value === "boolean") {
     return (
-      <span className="text-sm text-stone-600">
+      <p className="text-sm text-slate-600">
         {value ? "Yes" : "No"}
-      </span>
+      </p>
     );
   }
 
   if (Array.isArray(value)) {
-    const objectItems = value.some(
-      (item) => item !== null && typeof item === "object"
-    );
-
-    if (!objectItems) {
-      return (
-        <ul className="space-y-3">
-          {value.map((item, index) => (
-            <li key={index} className="flex items-start gap-3 text-sm leading-6 text-stone-600">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
-              <span>{String(item)}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    }
-
     return (
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-2">
         {value.map((item, index) => (
           <div
             key={index}
-            className="rounded-2xl border border-stone-200 bg-white p-4"
+            className="flex items-start gap-2 text-sm text-slate-600"
           >
-            <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-              <MapPin size={16} />
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-600" />
+            <div className="min-w-0 flex-1">
+              <VisualValue value={item} />
             </div>
-            <ValueView value={item} depth={depth + 1} />
           </div>
         ))}
       </div>
@@ -171,51 +197,19 @@ function ValueView({
 
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).filter(
-      ([, item]) => !isEmpty(item)
+      ([, item]) => !isBlank(item)
     );
 
-    if (!entries.length) {
-      return (
-        <p className="text-sm text-stone-400">
-          More details will appear here.
-        </p>
-      );
-    }
-
     return (
-      <div className={depth === 0 ? "space-y-5" : "space-y-4"}>
-        {entries.map(([key, item]) => {
-          const Icon = getIcon(key);
-          const nestedObject =
-            item !== null && typeof item === "object";
-
-          return (
-            <div key={key} className="min-w-0">
-              <div className="mb-2 flex items-center gap-2">
-                <Icon size={15} className="shrink-0 text-emerald-700" />
-                <h4 className="text-sm font-semibold text-stone-800">
-                  {formatLabel(key)}
-                </h4>
-              </div>
-
-              {nestedObject ? (
-                <div className="rounded-xl bg-stone-50 p-3 sm:p-4">
-                  <ValueView value={item} depth={depth + 1} />
-                </div>
-              ) : (
-                <div className="pl-0 sm:pl-6">
-                  {isDateKey(key) && typeof item === "string" ? (
-                    <p className="text-sm text-stone-600">
-                      {formatDate(item)}
-                    </p>
-                  ) : (
-                    <ValueView value={item} depth={depth + 1} />
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {entries.map(([key, item]) => (
+          <div key={key} className="rounded-xl bg-[#f7f8ff] p-3">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+              {labelOf(key)}
+            </p>
+            <VisualValue value={item} />
+          </div>
+        ))}
       </div>
     );
   }
@@ -231,19 +225,20 @@ export default function TripDetailsPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<string[]>([]);
 
   const tripId = params.id as string;
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
-    }
+    if (!authLoading && !user) router.replace("/login");
   }, [authLoading, user, router]);
 
   useEffect(() => {
     if (authLoading || !user || !tripId) return;
 
-    const fetchTrip = async () => {
+    let cancelled = false;
+
+    async function fetchTrip() {
       try {
         const token = localStorage.getItem("voyageai_access_token");
 
@@ -253,9 +248,7 @@ export default function TripDetailsPage() {
         }
 
         const response = await fetch(`${API_URL}/trip/${tripId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         const data = await response.json();
@@ -264,35 +257,33 @@ export default function TripDetailsPage() {
           throw new Error(data.detail || "Failed to load trip");
         }
 
-        setTrip(data);
+        if (!cancelled) setTrip(data);
       } catch (err) {
-        console.error("Failed to load trip:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load your trip."
-        );
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load your trip."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
+    }
 
     fetchTrip();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, user, tripId, router]);
 
   if (authLoading || loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f8f7f2]">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100">
-            <Loader2 size={28} className="animate-spin text-emerald-700" />
-          </div>
-          <div>
-            <p className="font-semibold text-stone-900">
-              Loading your adventure...
-            </p>
-            <p className="mt-1 text-sm text-stone-500">
-              Getting your travel plans ready.
-            </p>
-          </div>
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f9ff]">
+        <div className="text-center">
+          <Loader2 size={32} className="mx-auto animate-spin text-indigo-700" />
+          <p className="mt-4 font-semibold text-slate-800">
+            Preparing your adventure...
+          </p>
         </div>
       </main>
     );
@@ -300,20 +291,20 @@ export default function TripDetailsPage() {
 
   if (error || !trip) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f8f7f2] px-4">
-        <div className="max-w-md text-center">
-          <div className="mb-5 text-5xl">🗺️</div>
-          <h1 className="text-2xl font-bold text-stone-900">
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f9ff] px-4">
+        <div className="text-center">
+          <p className="text-5xl">🗺️</p>
+          <h1 className="mt-4 text-2xl font-bold text-slate-900">
             Trip not found
           </h1>
-          <p className="mt-3 text-stone-500">
+          <p className="mt-2 text-sm text-slate-500">
             {error || "We couldn't find this trip."}
           </p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="mt-6 rounded-xl bg-emerald-800 px-5 py-3 font-semibold text-white transition hover:bg-emerald-900"
+            className="mt-5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 font-semibold text-white shadow-lg shadow-indigo-900/10 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-purple-700"
           >
-            Back to Dashboard
+            Back to dashboard
           </button>
         </div>
       </main>
@@ -321,73 +312,116 @@ export default function TripDetailsPage() {
   }
 
   const itinerary = trip.itinerary;
-  const itineraryEntries = itinerary
+  const summary = getSummary(itinerary);
+  const highlights = getHighlights(trip.interests || []);
+
+  const sections = itinerary
     ? Object.entries(itinerary).filter(
         ([key, value]) =>
-          !["destination", "start_date", "end_date"].includes(
-            key.toLowerCase()
-          ) && !isEmpty(value)
+          !/^(destination|start_date|end_date|trip_summary|summary)$/i.test(key) &&
+          !isBlank(value)
       )
     : [];
 
+  const daysEntry = itinerary
+    ? Object.entries(itinerary).find(([key]) => /^(days|daily_itinerary|day_by_day|itinerary_days)$/i.test(key))
+    : undefined;
+  const rawDays = daysEntry?.[1];
+  const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
+    ? rawDays.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+    : rawDays && typeof rawDays === "object"
+      ? Object.entries(rawDays as Record<string, unknown>).map(([key, value]) =>
+          value && typeof value === "object" && !Array.isArray(value)
+            ? { day_label: key, ...(value as Record<string, unknown>) }
+            : { day_label: key, activities: value }
+        )
+      : [];
+
+  const costEntry = itinerary
+    ? Object.entries(itinerary).find(([key]) => /cost_summary|budget_breakdown|budget_summary|expenses/i.test(key))
+    : undefined;
+  const costData = costEntry?.[1] && typeof costEntry[1] === "object"
+    ? costEntry[1] as Record<string, unknown>
+    : {};
+  const moneyValue = (value: unknown) => {
+    const raw = typeof value === "number" ? value : Number(String(value ?? "").replace(/[^0-9.]/g, ""));
+    return Number.isFinite(raw) ? raw : null;
+  };
+  const estimatedTotal = moneyValue(
+    Object.entries(costData).find(([key]) => /estimated_total|total_cost|total_estimated_cost/i.test(key))?.[1]
+  );
+  const budgetAmount = Number(trip.budget) || 0;
+  const displayTotal = estimatedTotal ?? moneyValue(
+    Object.entries(costData).find(([key]) => /total/i.test(key) && !/shortfall/i.test(key))?.[1]
+  );
+  const budgetPercent = displayTotal && budgetAmount > 0
+    ? Math.min(100, Math.round((budgetAmount / displayTotal) * 100))
+    : 100;
+
+  const compact = (value: unknown, max = 135): string => {
+    const result = textOf(value).replace(/\s+/g, " ").trim();
+    return result.length > max ? `${result.slice(0, max - 1).trimEnd()}…` : result;
+  };
+  const field = (item: Record<string, unknown>, pattern: RegExp) =>
+    Object.entries(item).find(([key, value]) => pattern.test(key) && !isBlank(value))?.[1];
+
   const start = new Date(`${trip.start_date.slice(0, 10)}T12:00:00`);
   const end = new Date(`${trip.end_date.slice(0, 10)}T12:00:00`);
-
-  const tripDays =
+  const days =
     !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())
-      ? Math.max(
-          1,
-          Math.round((end.getTime() - start.getTime()) / 86400000) + 1
-        )
+      ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
       : null;
 
   return (
-    <main className="min-h-screen bg-[#f8f7f2] px-4 py-6 text-stone-900 sm:px-6 sm:py-10 lg:px-8">
+    <main className="min-h-screen bg-[#f7f9ff] px-4 py-5 text-slate-900 sm:px-7 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        {/* Navigation */}
-        <div className="mb-7 flex items-center justify-between">
+        <nav className="mb-5 flex items-center justify-between">
           <button
             onClick={() => router.push("/dashboard")}
-            className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-stone-600 transition hover:bg-white hover:text-stone-900"
+            className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-indigo-50"
           >
             <ArrowLeft size={17} />
             Dashboard
           </button>
 
-          <div className="flex items-center gap-2 text-sm font-bold tracking-tight text-emerald-900">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-900 text-white">
+          <div className="flex items-center gap-2 font-bold text-indigo-950">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white">
               <Compass size={19} />
             </span>
             VoyageAI
           </div>
-        </div>
+        </nav>
 
-        {/* Hero */}
-        <section className="relative overflow-hidden rounded-[2rem] bg-[#173f35] px-6 py-8 text-white sm:px-10 sm:py-12">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-emerald-300/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-lime-300/10 blur-3xl" />
+        {/* Destination hero */}
+        <section className="relative min-h-[300px] overflow-hidden rounded-[2rem] bg-[#312e81] sm:min-h-[360px]">
+          <img
+            src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2000&q=90"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-45"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1e1b4b]/95 via-[#312e81]/70 to-transparent" />
 
-          <div className="relative">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold tracking-wide text-emerald-50">
+          <div className="relative flex min-h-[300px] flex-col justify-end p-6 sm:min-h-[360px] sm:p-10">
+            <div className="mb-4 flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm">
               <Sparkles size={14} />
               YOUR NEXT ADVENTURE
             </div>
 
-            <h1 className="max-w-3xl text-4xl font-black tracking-tight sm:text-6xl">
+            <h1 className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-6xl">
               {trip.destination}
             </h1>
 
-            <p className="mt-4 max-w-xl text-sm leading-7 text-emerald-50/80 sm:text-base">
-              A trip shaped around your interests, your pace, and the places
-              you want to discover
-              {user?.name ? `, ${user.name}` : ""}.
+            <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/85 sm:text-base">
+              <CalendarDays size={17} />
+              {formatDate(trip.start_date)} – {formatDate(trip.end_date)}
+              {days && <span>· {days} days</span>}
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap gap-2">
               {(trip.interests || []).map((interest) => (
                 <span
                   key={interest}
-                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white"
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
                 >
                   {interest}
                 </span>
@@ -396,158 +430,253 @@ export default function TripDetailsPage() {
           </div>
         </section>
 
-        {/* Trip overview */}
-        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-5">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800">
-              <CalendarDays size={19} />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              Travel dates
-            </p>
-            <p className="mt-2 font-bold text-stone-900">
-              {formatDate(trip.start_date)}
-            </p>
-            <p className="mt-1 text-sm text-stone-500">
-              to {formatDate(trip.end_date)}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-5">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800">
-              <Clock size={19} />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              Duration
-            </p>
-            <p className="mt-2 text-2xl font-bold text-stone-900">
-              {tripDays ?? "—"}{" "}
-              <span className="text-sm font-medium text-stone-500">
-                {tripDays === 1 ? "day" : "days"}
-              </span>
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-5">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-lime-50 text-lime-800">
+        {/* Compact overview */}
+        <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
               <Wallet size={19} />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              Your budget
-            </p>
-            <p className="mt-2 text-2xl font-bold text-stone-900">
-              ₹{Number(trip.budget).toLocaleString("en-IN")}
-            </p>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">Total budget</p>
+              <p className="truncate font-bold text-slate-900">
+                ₹{Number(trip.budget).toLocaleString("en-IN")}
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-5">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-800">
+          <div className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+              <Compass size={19} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">Travel style</p>
+              <p className="truncate font-bold capitalize text-slate-900">
+                {trip.travel_style}
+              </p>
+            </div>
+          </div>
+
+          <div className="col-span-2 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-4 lg:col-span-1">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
               <MapPin size={19} />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              Travel style
-            </p>
-            <p className="mt-2 text-lg font-bold capitalize text-stone-900">
-              {trip.travel_style}
-            </p>
+            <div>
+              <p className="text-xs text-slate-400">Your destination</p>
+              <p className="font-bold text-slate-900">{trip.destination}</p>
+            </div>
           </div>
         </section>
 
-        {/* Itinerary heading */}
-        <section className="mt-12">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        {/* Picture-first highlights */}
+        <section className="mt-8">
+          <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">
-                THE JOURNEY
-              </p>
-              <h2 className="text-3xl font-black tracking-tight text-stone-900 sm:text-4xl">
-                Your itinerary
-              </h2>
-              <p className="mt-2 text-sm text-stone-500">
-                Your trip, thoughtfully put together.
-              </p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">MADE FOR YOU</p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight">Your trip highlights</h2>
             </div>
-            <div className="flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-900">
-              <CheckCircle2 size={15} />
-              Personalised plan
+            <Camera size={21} className="text-slate-400" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {highlights.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article key={item.title} className="group relative h-48 overflow-hidden rounded-3xl bg-indigo-100 sm:h-56">
+                  <img src={item.image} alt={item.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                  <div className="absolute bottom-0 left-0 p-5 text-white">
+                    <Icon size={21} className="mb-2" />
+                    <h3 className="text-xl font-bold">{item.title}</h3>
+                    <p className="mt-1 text-sm text-white/80">{item.subtitle}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">Inspiration imagery. Confirm specific venues and opening details before visiting.</p>
+        </section>
+
+        {/* Budget at a glance */}
+        <section className="mt-9 rounded-3xl border border-indigo-100 bg-white p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">BUDGET SNAPSHOT</p>
+              <h2 className="mt-1 text-xl font-black">Keep your trip on track</h2>
+            </div>
+            {displayTotal !== null && displayTotal !== undefined && displayTotal > budgetAmount && (
+              <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">Over budget</span>
+            )}
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl bg-[#f7f8ff] p-4">
+              <p className="text-sm text-slate-500">Your budget</p>
+              <p className="mt-1 text-2xl font-black text-slate-900">₹{budgetAmount.toLocaleString("en-IN")}</p>
+            </div>
+            <div className="rounded-2xl bg-[#f7f8ff] p-4">
+              <p className="text-sm text-slate-500">Estimated trip cost</p>
+              <p className="mt-1 text-2xl font-black text-slate-900">
+                {displayTotal !== null && displayTotal !== undefined ? `₹${displayTotal.toLocaleString("en-IN")}` : "Not provided"}
+              </p>
             </div>
           </div>
+          {displayTotal !== null && displayTotal !== undefined && displayTotal > 0 && (
+            <div className="mt-4">
+              <div className="mb-2 flex justify-between text-xs text-slate-500"><span>Budget coverage</span><span>{budgetPercent}%</span></div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-indigo-100"><div className={`h-full rounded-full ${displayTotal > budgetAmount ? "bg-amber-500" : "bg-indigo-600"}`} style={{ width: `${budgetPercent}%` }} /></div>
+              {displayTotal > budgetAmount && <p className="mt-3 text-sm font-medium text-amber-700">You may need ₹{(displayTotal - budgetAmount).toLocaleString("en-IN")} more, or adjust the plan to fit your budget.</p>}
+            </div>
+          )}
+          {Object.keys(costData).length > 0 && (
+            <details className="mt-4 rounded-xl border border-indigo-100 p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-indigo-800">See cost breakdown</summary>
+              <div className="mt-3"><VisualValue value={costData} /></div>
+            </details>
+          )}
+        </section>
 
-          {itineraryEntries.length > 0 ? (
+        {/* Day-by-day visual itinerary */}
+        <section className="mt-10">
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">YOUR TRAVEL PLAN</p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight">The adventure, day by day</h2>
+            <p className="mt-1 text-sm text-slate-500">Photos first, only the details you need.</p>
+          </div>
+
+          {dayItems.length > 0 ? (
             <div className="space-y-5">
-              {itineraryEntries.map(([key, value], index) => {
-                const Icon = getIcon(key);
-                const title = formatLabel(key);
-                const isSummary = /summary|overview|introduction/i.test(key);
-
+              {dayItems.map((day, index) => {
+                const date = field(day, /date/i);
+                const title = field(day, /title|theme|name|day_label/i) ?? `Day ${index + 1}`;
+                const dayActivities = Object.entries(day).filter(([key, value]) =>
+                  /morning|afternoon|evening|activity|activities|schedule|events/i.test(key) && !isBlank(value)
+                );
+                const fallbackActivities = dayActivities.length ? dayActivities : Object.entries(day).filter(([key, value]) =>
+                  !/date|title|theme|name|day_label|meal|weather|daily_cost|notes/i.test(key) && !isBlank(value)
+                );
                 return (
-                  <article
-                    key={key}
-                    className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm"
-                  >
-                    <div className="flex items-center gap-4 border-b border-stone-100 px-5 py-5 sm:px-7">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
-                        <Icon size={22} />
+                  <article key={`${String(title)}-${index}`} className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm shadow-indigo-950/[0.03]">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-50 px-5 py-4 sm:px-6">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">DAY {index + 1}{date ? ` · ${formatDate(String(date))}` : ""}</p>
+                        <h3 className="mt-1 text-lg font-bold text-slate-900">{textOf(title)}</h3>
                       </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">
-                          {isSummary ? "THE BIG PICTURE" : `TRIP DETAILS · ${String(index + 1).padStart(2, "0")}`}
-                        </p>
-                        <h3 className="text-lg font-bold text-stone-900 sm:text-xl">
-                          {title}
-                        </h3>
-                      </div>
-
-                      <ChevronRight
-                        size={19}
-                        className="shrink-0 text-stone-300"
-                      />
+                      <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">{fallbackActivities.length || 0} planned stops</span>
                     </div>
-
-                    <div className="px-5 py-6 sm:px-7 sm:py-7">
-                      <ValueView value={value} />
+                    <div className="grid gap-0 md:grid-cols-2">
+                      {fallbackActivities.map(([slot, activity], activityIndex) => {
+                        const activityObject = activity && typeof activity === "object" && !Array.isArray(activity)
+                          ? activity as Record<string, unknown>
+                          : { activity };
+                        const activityName = field(activityObject, /activity|title|name|description|event/i) ?? activity;
+                        const location = field(activityObject, /location|place|venue/i);
+                        const duration = field(activityObject, /duration|hours/i);
+                        const cost = field(activityObject, /estimated_cost|cost|price|budget/i);
+                        const description = field(activityObject, /notes|description|details|why/i);
+                        const image = /food|meal|lunch|dinner|breakfast/i.test(slot)
+                          ? photos[1].image
+                          : /nature|adventure|park|desert|garden/i.test(`${slot} ${textOf(activityName)}`)
+                            ? photos[2].image
+                            : /culture|heritage|fort|palace|museum|temple|market/i.test(`${slot} ${textOf(activityName)}`)
+                              ? photos[3].image
+                              : photos[0].image;
+                        return (
+                          <div key={`${slot}-${activityIndex}`} className={`flex min-w-0 gap-4 p-4 sm:p-5 ${activityIndex % 2 === 0 ? "md:border-r md:border-indigo-50" : ""} ${activityIndex > 1 ? "border-t border-indigo-50" : ""}`}>
+                            <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-indigo-50 sm:h-32 sm:w-36">
+                              <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                              <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold uppercase text-indigo-800">{labelOf(slot)}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-bold leading-snug text-slate-900">{compact(activityName, 75)}</h4>
+                              {(typeof location === "string" || typeof location === "number") &&
+  String(location).trim() !== "" && (
+    <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+      <MapPin size={12} className="shrink-0" />
+      {compact(String(location), 55)}
+    </p>
+)}
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {(typeof duration === "string" || typeof duration === "number") &&
+  String(duration).trim() !== "" && (
+    <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
+      {compact(String(duration), 24)}
+    </span>
+  )}
+                                {cost !== undefined && <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">₹{moneyValue(cost)?.toLocaleString("en-IN") ?? compact(cost, 20)}</span>}
+                              </div>
+                                {typeof description === "string" && description.trim() !== "" && (
+  <details className="mt-2">
+    <summary className="cursor-pointer text-xs font-semibold text-indigo-700">
+      More details
+    </summary>
+    <p className="mt-1 text-xs leading-5 text-slate-500">
+      {compact(description, 320)}
+    </p>
+  </details>
+)}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+                    {Object.entries(day).some(([key, value]) => /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) && !isBlank(value)) && (
+                      <details className="border-t border-indigo-50 px-5 py-3 sm:px-6">
+                        <summary className="cursor-pointer text-sm font-semibold text-indigo-700">Meals, weather & day notes</summary>
+                        <div className="mt-3"><VisualValue value={Object.fromEntries(Object.entries(day).filter(([key, value]) => /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) && !isBlank(value)))} /></div>
+                      </details>
+                    )}
                   </article>
                 );
               })}
             </div>
           ) : (
-            <div className="rounded-3xl border border-stone-200 bg-white px-6 py-12 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
-                <Compass size={26} />
-              </div>
-              <h3 className="text-lg font-bold text-stone-900">
-                Your itinerary is not available yet
-              </h3>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-500">
-                We couldn't find itinerary details for this trip. Your trip
-                information is still available above.
-              </p>
+            <div className="rounded-2xl border border-indigo-100 bg-white p-5 text-sm text-slate-500">
+              A day-by-day itinerary wasn't found in the returned data. You can still open the trip information below.
             </div>
           )}
         </section>
 
-        {/* Footer */}
-        <footer className="mt-12 border-t border-stone-200 py-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-bold text-emerald-950">
-                Made for the way you travel.
-              </p>
-              <p className="mt-1 text-xs text-stone-500">
-                Your next chapter starts somewhere new.
-              </p>
-            </div>
-
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-            >
-              <ArrowLeft size={16} />
-              Back to dashboard
-            </button>
+        {/* Secondary information stays tucked away */}
+        <section className="mt-10">
+          <div className="mb-4">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">THE EXTRAS</p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight">Helpful details</h2>
+            <p className="mt-1 text-sm text-slate-500">Transport, accommodation, food tips and agent notes, when available.</p>
           </div>
+          <div className="space-y-3">
+            {sections.filter(([key]) => !/^(days|daily_itinerary|day_by_day|itinerary_days|cost_summary|budget_breakdown|budget_summary)$/i.test(key)).map(([key, value]) => {
+              const Icon = getSectionIcon(key);
+              const isOpen = expanded.includes(key);
+              const preview = compact(value, 100);
+              return (
+                <article key={key} className="overflow-hidden rounded-2xl border border-indigo-100 bg-white">
+                  <button onClick={() => setExpanded((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} aria-expanded={isOpen} className="flex w-full items-center gap-3 p-4 text-left sm:p-5">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700"><Icon size={20} /></div>
+                    <div className="min-w-0 flex-1"><h3 className="font-bold text-slate-900">{labelOf(key)}</h3><p className="mt-1 line-clamp-1 text-xs text-slate-500">{preview || "View details"}</p></div>
+                    <ChevronDown size={19} className={`shrink-0 text-slate-400 transition ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isOpen && <div className="border-t border-indigo-50 px-4 py-5 sm:px-6"><VisualValue value={value} /></div>}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <footer className="mt-12 flex flex-col gap-3 border-t border-indigo-100 py-7 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-bold text-indigo-950">
+              Made for the way you travel.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Your next chapter starts somewhere new.
+            </p>
+          </div>
+
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-900/10 transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-purple-700"
+          >
+            <ArrowLeft size={16} />
+            Back to dashboard
+          </button>
         </footer>
       </div>
     </main>

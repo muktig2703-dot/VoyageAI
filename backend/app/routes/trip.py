@@ -10,7 +10,6 @@ from app.schemas.trip import TripCreate
 from app.agents.orchestrator import orchestrate_trip
 from app.dependencies import get_current_user
 from uuid import UUID
-
 router = APIRouter(prefix="/trip", tags=["Trip"])
 
 
@@ -45,11 +44,14 @@ def create_trip(
         ) from exc
 
     except Exception as exc:
-        # Handle unexpected workflow or application errors.
+    # Log the actual error in the backend terminal.
+        import logging
+        logging.exception("Trip generation failed unexpectedly")
+
         raise HTTPException(
             status_code=503,
             detail=(
-                "VoyageAI could not generate the trip right now. "
+               "VoyageAI could not generate the trip right now. "
                 "Please try again later."
             ),
         ) from exc
