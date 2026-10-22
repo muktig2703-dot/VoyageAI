@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -21,12 +20,20 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import SupportWidget from "../../components/SupportWidget";
 
 const destinationOptions = [
   {
     name: "Goa",
     country: "India",
     category: "Beach escape",
+    image:
+      "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    name: "Goa Coastal Escape",
+    country: "India",
+    category: "Weekend getaway",
     image:
       "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=900&q=85",
   },
@@ -45,11 +52,46 @@ const destinationOptions = [
       "https://images.unsplash.com/photo-1599661046827-dacff0c0f09a?auto=format&fit=crop&w=900&q=85",
   },
   {
+    name: "Rajasthan Explorer",
+    country: "India",
+    category: "Indian group tour",
+    image:
+      "https://images.unsplash.com/photo-1599661046827-dacff0c0f09a?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    name: "Kerala Road Trip",
+    country: "India",
+    category: "Nature & road trip",
+    image:
+      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=900&q=85",
+  },
+  {
     name: "Bali",
     country: "Indonesia",
     category: "Tropical getaway",
     image:
       "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    name: "Swiss Alps",
+    country: "Switzerland",
+    category: "Nature & adventure",
+    image:
+      "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    name: "Kyoto",
+    country: "Japan",
+    category: "Culture & heritage",
+    image:
+      "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=900&q=85",
+  },
+  {
+    name: "Santorini",
+    country: "Greece",
+    category: "Romantic beach escape",
+    image:
+      "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?auto=format&fit=crop&w=900&q=85",
   },
 ];
 
@@ -812,6 +854,7 @@ export default function PlanPage() {
           VoyageAI · A little closer to your next adventure.
         </footer>
       </div>
+      <SupportWidget />
     </main>
   );
 }

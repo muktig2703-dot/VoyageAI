@@ -6,18 +6,25 @@ import { m, motion, number } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
+  Bookmark,
   CalendarDays,
   Compass,
   Globe2,
+  Heart,
   LogOut,
   MapPin,
   PlaneTakeoff,
   Search,
   Sparkles,
 } from "lucide-react";
-
+import SupportWidget from "../../components/SupportWidget";
 import { useAuth } from "../../context/AuthContext";
-
+import {
+  getSavedPackages,
+  toggleSavedPackage,
+  getBookmarkedPackages,
+  toggleBookmarkedPackage,
+} from "../../lib/savedPackages";
 const destinations = [
   {
     name: "Bali",
@@ -25,7 +32,7 @@ const destinations = [
     category: "Beach",
     packageType: "Honeymoon",
     price: 54999,
-    hotelCatgory: 5,
+    hotelCategory: 5,
     themes: ["Beach", "Adventure", "Romantic"],
     description: "Tropical escapes & hidden waterfalls",
     days: "5–7 days",
@@ -134,10 +141,25 @@ export default function DashboardPage() {
   const [maxDuration, setMaxDuration] = useState("any");
   const [hotelCategory, setHotelCategory] = useState("any");
   const [selectedTheme, setSelectedTheme] = useState("any");
+  const [savedPackages, setSavedPackages] = useState<
+  import("../../lib/savedPackages").SavedPackage[]
+>([]);
+  const [bookmarkedPackages, setBookmarkedPackages] = useState<
+  import("../../lib/savedPackages").SavedPackage[]
+>([]);
+
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  useEffect(() => {
+  if (!loading && user) {
+    const userKey = user.email || user.name;
+    setSavedPackages(getSavedPackages(userKey));
+    setBookmarkedPackages(getBookmarkedPackages(userKey));
+  }
+}, [loading, user]);
 
   
 
@@ -614,7 +636,82 @@ return (
 
                   <span className="absolute left-4 top-4 rounded-full border border-white/30 bg-black/20 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-md">
                     {destination.category}
+                    
+<button
+  onClick={() => {
+    const userKey = user!.email || user!.name;
+
+    const updated = toggleBookmarkedPackage(userKey, {
+      ...destination,
+      hotelCategory: destination.hotelCategory,
+    });
+
+    setBookmarkedPackages(updated);
+  }}
+  aria-label={
+    bookmarkedPackages.some(
+      (item) => item.name === destination.name
+    )
+      ? `Remove ${destination.name} from saved packages`
+      : `Save ${destination.name} to saved packages`
+  }
+  title={
+    bookmarkedPackages.some(
+      (item) => item.name === destination.name
+    )
+      ? "Remove from saved packages"
+      : "Save to saved packages"
+  }
+  className="absolute right-4 top-10 flex h-8 w-10 items-center justify-center rounded-full bg-white/95 text-indigo-700 shadow-sm transition hover:scale-110 hover:bg-white"
+>
+  <Bookmark
+    size={15}
+    fill={
+      bookmarkedPackages.some(
+        (item) => item.name === destination.name
+      )
+        ? "currentColor"
+        : "none"
+    }
+    className="text-purple-600"
+  />
+</button>
                   </span>
+                  <button
+  onClick={() => {
+    const userKey = user.email || user.name;
+    const updated = toggleSavedPackage(userKey, {
+      ...destination,
+      hotelCategory: destination.hotelCategory,
+    });
+    setSavedPackages(updated);
+  }}
+  aria-label={
+    savedPackages.some((item) => item.name === destination.name)
+      ? `Remove ${destination.name} from favourites`
+      : `Save ${destination.name} to favourites`
+  }
+  title={
+    savedPackages.some((item) => item.name === destination.name)
+      ? "Remove from favourites"
+      : "Save to favourites"
+  }
+  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-indigo-700 shadow-sm transition hover:scale-110 hover:bg-white"
+>
+  <Heart
+    size={19}
+    fill={
+      savedPackages.some((item) => item.name === destination.name)
+        ? "currentColor"
+        : "none"
+    }
+    className={
+      savedPackages.some((item) => item.name === destination.name)
+        ? "text-purple-600"
+        : "text-slate-600"
+    }
+  />
+</button>
 
                   <button
                     onClick={() => planDestination(destination.name)}
@@ -748,6 +845,7 @@ return (
           <span>Made for the journeys you haven't taken yet.</span>
         </footer>
       </div>
+      <SupportWidget />
     </main>
   );
 }
