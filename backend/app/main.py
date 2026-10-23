@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.health import router as health_router
 from app.routes.trip import router as trip_router
 from app.routes.auth import router as auth_router
+from app.routes.callback import router as callback_router
+from app.routes.support_chat import router as support_chat_router
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -32,6 +34,8 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(trip_router)
 app.include_router(auth_router)
+app.include_router(callback_router)
+app.include_router(support_chat_router)
 
 
 @app.get("/")
