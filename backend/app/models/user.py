@@ -1,6 +1,5 @@
 import uuid
-
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -32,6 +31,13 @@ class User(Base):
         String,
         nullable=False
     )
+
+    phone = Column(String(20), nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    gender = Column(String(30), nullable=True)
+    nationality = Column(String(80), nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

@@ -16,6 +16,7 @@ import {
   PlaneTakeoff,
   Search,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import SupportWidget from "../../components/SupportWidget";
 import { useAuth } from "../../context/AuthContext";
@@ -298,12 +299,24 @@ return (
             </button>
           </nav>
 
-          <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold">{user.name}</p>
               <p className="text-xs text-slate-500">Your travel space</p>
             </div>
+
             <button
+              type="button"
+              onClick={() => router.push("/profile")}
+              aria-label="My profile"
+              title="My profile"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-600 transition hover:border-indigo-300 hover:bg-indigo-50"
+            >
+              <UserRound size={19} />
+            </button>
+
+            <button
+              type="button"
               onClick={handleLogout}
               aria-label="Log out"
               title="Log out"
