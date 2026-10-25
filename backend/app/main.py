@@ -10,6 +10,8 @@ from app.routes.auth import router as auth_router
 from app.routes.callback import router as callback_router
 from app.routes.support_chat import router as support_chat_router
 from app.routes.profile import router as profile_router
+from app.routes.co_traveller import router as co_traveller_router
+from app.routes.login_sessions import router as login_sessions_router
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -38,7 +40,8 @@ app.include_router(auth_router)
 app.include_router(callback_router)
 app.include_router(support_chat_router)
 app.include_router(profile_router)
-
+app.include_router(co_traveller_router)
+app.include_router(login_sessions_router)
 
 @app.get("/")
 def home():

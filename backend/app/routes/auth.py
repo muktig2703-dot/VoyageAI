@@ -6,6 +6,8 @@ from app.models.user import User
 from app.schemas.auth import SignupRequest, LoginRequest, UserResponse, TokenResponse
 from app.security import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user
+from app.models.login_session import LoginSession
+from fastapi import Request
 
 router = APIRouter(
     prefix="/auth",
@@ -58,6 +60,7 @@ def signup(
 )
 def login(
     data: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     # Find user by email
@@ -78,10 +81,26 @@ def login(
             detail="Invalid email or password"
         )
 
-    # Create JWT token
-    access_token = create_access_token(
-        str(user.id)
+    
+    # Create a unique session for this login
+    login_session = LoginSession(
+        user_id=user.id,
+        device_name=request.headers.get(
+            "user-agent",
+            "Unknown device"
+        )[:200],
     )
+
+    db.add(login_session)
+    db.flush()
+
+    # Create JWT token linked to this session
+    access_token = create_access_token(
+        str(user.id),
+        session_id=str(login_session.id),
+    )
+
+    db.commit()
 
     return TokenResponse(
         access_token=access_token,

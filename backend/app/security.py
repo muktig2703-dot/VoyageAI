@@ -19,29 +19,35 @@ def verify_password(
 ) -> bool:
     return password_hash.verify(password, hashed_password)
 
-
-def create_access_token(user_id: str) -> str:
+def create_access_token(
+    user_id: str,
+    session_id: str | None = None,
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
     payload = {
         "sub": user_id,
-        "exp": expire
+        "exp": expire,
     }
+
+    if session_id:
+        payload["sid"] = session_id
 
     return jwt.encode(
         payload,
         settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
+        algorithm=settings.JWT_ALGORITHM,
     )
 
-def decode_access_token(token: str) -> str:
+
+def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
+            algorithms=[settings.JWT_ALGORITHM],
         )
 
         user_id = payload.get("sub")
@@ -49,19 +55,19 @@ def decode_access_token(token: str) -> str:
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token"
+                detail="Invalid authentication token",
             )
 
-        return user_id
+        return payload
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token has expired"
+            detail="Authentication token has expired",
         )
 
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
+            detail="Invalid authentication token",
         )
