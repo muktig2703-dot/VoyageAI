@@ -118,6 +118,11 @@ const [sessionsError, setSessionsError] = useState("");
 const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 const [sessionMessage, setSessionMessage] = useState("");
 
+const [currentPassword, setCurrentPassword] = useState("");
+const [newPassword, setNewPassword] = useState("");
+const [confirmPassword, setConfirmPassword] = useState("");
+const [passwordMessage, setPasswordMessage] = useState("");
+
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
@@ -702,6 +707,64 @@ async function handleRevokeSession(sessionId: string) {
     setRevokingSessionId(null);
   }
 }
+
+
+const handleChangePassword = async (
+  e: React.FormEvent<HTMLFormElement>
+) => {
+  e.preventDefault();
+  setPasswordMessage("");
+
+  if (newPassword !== confirmPassword) {
+    setPasswordMessage("New passwords do not match.");
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    setPasswordMessage(
+      "Your new password must be at least 8 characters long."
+    );
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem("voyageai_access_token");
+
+    const response = await fetch(
+      `${API_URL}/auth/change-password`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.detail || "Unable to change password."
+      );
+    }
+
+    setPasswordMessage("Password changed successfully! 🔐");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  } catch (error) {
+    setPasswordMessage(
+      error instanceof Error
+        ? error.message
+        : "Something went wrong. Please try again."
+    );
+  }
+};
 
   return (
     <main className="min-h-screen bg-[#f7f9ff] text-slate-900">
@@ -1601,6 +1664,87 @@ async function handleRevokeSession(sessionId: string) {
         ))}
       </div>
     )}
+  </div>
+
+) : activeSection === "Reset Password" ? (
+  <div className="mx-auto max-w-xl space-y-6 text-left">
+    <div>
+      <h2 className="text-2xl font-bold text-slate-900">
+        Reset Password
+      </h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Choose a new password to keep your VoyageAI account secure.
+      </p>
+    </div>
+
+    <form onSubmit={handleChangePassword} className="space-y-5">
+      <div>
+        <label className="mb-2 block text-sm font-medium text-slate-700">
+          Current Password
+        </label>
+        <input
+          type="password"
+          autoComplete="current-password"
+          required
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          placeholder="Enter current password"
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-slate-700">
+          New Password
+        </label>
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          placeholder="At least 8 characters"
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-slate-700">
+          Confirm New Password
+        </label>
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          placeholder="Enter new password again"
+        />
+      </div>
+
+      {passwordMessage && (
+        <div
+          role="status"
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            passwordMessage.includes("successfully")
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {passwordMessage}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 font-semibold text-white shadow-md transition hover:from-indigo-700 hover:to-purple-700"
+      >
+        Update Password
+      </button>
+    </form>
   </div>
 ) : (
   <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">

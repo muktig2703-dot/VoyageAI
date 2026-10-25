@@ -54,3 +54,10 @@ class ProfileUpdate(BaseModel):
     nationality: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+
+
+from pydantic import Field
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)

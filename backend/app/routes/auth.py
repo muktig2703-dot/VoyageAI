@@ -7,6 +7,9 @@ from app.schemas.auth import SignupRequest, LoginRequest, UserResponse, TokenRes
 from app.security import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user
 from app.models.login_session import LoginSession
+from app.schemas.auth import ChangePasswordRequest
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.security import decode_access_token
 from fastapi import Request
 
 router = APIRouter(
@@ -124,3 +127,56 @@ def get_me(
         name=current_user.name,
         email=current_user.email
     )
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
+    # Verify the current password
+    if not verify_password(
+        data.current_password,
+        current_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Prevent reusing the same password
+    if verify_password(
+        data.new_password,
+        current_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different"
+        )
+
+
+    payload = decode_access_token(credentials.credentials)
+    current_session_id = payload.get("sid")
+
+    if not current_session_id:
+      raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid login session. Please log in again.",
+    )
+
+    current_user.password_hash = hash_password(data.new_password)
+
+# Revoke every other active session for this user
+    db.query(LoginSession).filter(
+    LoginSession.user_id == current_user.id,
+    LoginSession.is_revoked.is_(False),
+    LoginSession.id != current_session_id,
+).update(
+    {LoginSession.is_revoked: True},
+    synchronize_session=False,
+)
+
+    db.commit()
+
+    return {"message": "Password changed successfully"}
