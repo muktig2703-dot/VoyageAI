@@ -1,4 +1,3 @@
-
 import json
 from typing import TypedDict
 
@@ -15,7 +14,7 @@ from app.agents.critic import critic_agent
 from app.services.progress import update_progress
 
 
-MAX_REVIEW_ATTEMPTS = 2
+MAX_REVIEW_ATTEMPTS = 1
 
 
 class TravelState(TypedDict):
@@ -75,7 +74,31 @@ def activity_node(state: TravelState):
 
 
 def budget_node(state: TravelState):
-    return run_agent(state, "budget", budget_agent)
+    update_progress(state, "budget", "running")
+
+    try:
+        result = budget_agent(
+            data=state["data"],
+            agent_results=state["itinerary"],
+        )
+
+        if not isinstance(result, dict):
+            raise ValueError(
+                "Budget agent must return a dictionary."
+            )
+
+        if result.get("error") or result.get("parse_error"):
+            raise ValueError(
+                "Budget agent returned an error or invalid output."
+            )
+
+        state["itinerary"]["budget"] = result
+        update_progress(state, "budget", "completed")
+        return state
+
+    except Exception:
+        update_progress(state, "budget", "failed")
+        raise
 
 
 # Assemble or revise the final itinerary
@@ -113,10 +136,6 @@ def itinerary_node(state: TravelState):
 
 def critic_node(state: TravelState):
     update_progress(state, "critic", "running")
-
-    state["review_attempts"] = (
-        state.get("review_attempts", 0) + 1
-    )
 
     # Provider errors intentionally propagate to the API route.
     review = critic_agent(
@@ -238,24 +257,25 @@ def critic_node(state: TravelState):
 
     return state
 
-
 # Decide whether to finish or revise
-
 def review_router(state: TravelState):
     review = state.get("review", {})
 
     if review.get("approved") is True:
         return END
 
-    # Do not waste another LLM call on malformed critic output.
+    # Do not retry malformed critic output.
     if review.get("validation_error"):
         return END
 
-    if state.get("review_attempts", 0) < MAX_REVIEW_ATTEMPTS:
+    # Allow at most MAX_REVIEW_ATTEMPTS itinerary revisions.
+    attempts = state.get("review_attempts", 0)
+
+    if attempts < MAX_REVIEW_ATTEMPTS:
+        state["review_attempts"] = attempts + 1
         return "revise_itinerary"
 
     return END
-
 
 # Construct the graph
 

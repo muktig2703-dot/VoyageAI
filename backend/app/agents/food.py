@@ -1,8 +1,9 @@
 
 import json
-
+import math
+from datetime import date
 from app.services.places import search_places
-from app.services.llm import llm
+from app.services.llm import invoke_gemini
 
 
 def food_agent(data):
@@ -88,7 +89,7 @@ FIELD RULES:
 - Do not include markdown, code fences, or text outside the JSON.
 """
 
-    response = llm.invoke(prompt)
+    response = invoke_gemini(prompt)
     content = response.content
 
     try:
@@ -132,6 +133,32 @@ FIELD RULES:
             ),
             "parse_error": True,
         }
+
+    
+    if not food_plan.get("parse_error"):
+        start_date = date.fromisoformat(str(data["start_date"]))
+        end_date = date.fromisoformat(str(data["end_date"]))
+
+        trip_days = (end_date - start_date).days + 1
+
+        daily_cost = food_plan.get("estimated_daily_food_cost")
+
+        if (
+            isinstance(daily_cost, bool)
+            or not isinstance(daily_cost, (int, float))
+            or not math.isfinite(daily_cost)
+            or daily_cost < 0
+        ):
+            raise ValueError("Daily food cost is invalid.")
+
+        if trip_days <= 0:
+            raise ValueError("Trip duration must be positive.")
+
+        # Recalculate the trip total from the daily estimate.
+        food_plan["estimated_total_food_cost"] = (
+            daily_cost * trip_days
+        )
+
 
     return {
         "restaurants": restaurants,

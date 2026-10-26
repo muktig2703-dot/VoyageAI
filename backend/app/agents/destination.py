@@ -3,7 +3,7 @@ import json
 
 from app.services.search import web_search
 from app.services.weather import get_weather
-from app.services.llm import llm
+from app.services.llm import invoke_gemini
 
 
 def destination_agent(data):
@@ -104,7 +104,7 @@ FIELD RULES
 - Do not include markdown, code fences, or text outside the JSON.
 """
 
-    response = llm.invoke(prompt)
+    response = invoke_gemini(prompt)
     content = response.content
 
     try:

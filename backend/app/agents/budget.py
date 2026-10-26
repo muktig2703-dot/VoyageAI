@@ -1,11 +1,12 @@
-
 import json
+import math
 from datetime import date
 
-from app.services.llm import llm
+from app.services.llm import invoke_gemini
 
 
-def budget_agent(data):
+def budget_agent(data, agent_results=None):
+    agent_results = agent_results or {}
     start_date = date.fromisoformat(str(data["start_date"]))
     end_date = date.fromisoformat(str(data["end_date"]))
 
@@ -14,6 +15,86 @@ def budget_agent(data):
 
     trip_days = (end_date - start_date).days + 1
     trip_nights = max((end_date - start_date).days, 0)
+
+    
+    specialist_estimates = {}
+
+    # Accommodation estimate
+    accommodation = agent_results.get("accommodation", {})
+    if isinstance(accommodation, dict):
+        specialist_estimates["accommodation"] = {
+            "estimated_total_cost": accommodation.get(
+                "total_estimated_cost"
+            ),
+            "recommended_nightly_budget": accommodation.get(
+                "recommended_nightly_budget"
+            ),
+        }
+
+    # Transport estimate
+    transport = agent_results.get("transport", {})
+    if isinstance(transport, dict):
+        specialist_estimates["transport"] = {
+            "estimated_total_cost": transport.get(
+                "estimated_total_cost"
+            ),
+            "arrival_cost": (
+                transport.get("arrival", {}).get("estimated_cost")
+                if isinstance(transport.get("arrival"), dict)
+                else None
+            ),
+        }
+
+    # Food estimate is nested inside food_plan
+    food = agent_results.get("food", {})
+    if isinstance(food, dict):
+        food_plan = food.get("food_plan", {})
+        if isinstance(food_plan, dict):
+            specialist_estimates["food"] = {
+                "estimated_total_food_cost": food_plan.get(
+                    "estimated_total_food_cost"
+                ),
+                "estimated_daily_food_cost": food_plan.get(
+                    "estimated_daily_food_cost"
+                ),
+            }
+
+    # Activity estimate is nested inside plan
+    activities = agent_results.get("activities", {})
+    if isinstance(activities, dict):
+        activity_plan = activities.get("plan", {})
+        if isinstance(activity_plan, dict):
+            specialist_estimates["activities"] = {
+                "estimated_total_activity_cost": activity_plan.get(
+                    "estimated_total_activity_cost"
+                ),
+            }
+    # Calculate known specialist costs after extracting all estimates.
+    known_specialist_costs = {}
+
+    for name, fields in specialist_estimates.items():
+        cost = next(
+            (
+                value
+                for key, value in fields.items()
+                if key in {
+                    "estimated_total_cost",
+                    "estimated_total_food_cost",
+                    "estimated_total_activity_cost",
+                }
+            ),
+            None,
+        )
+
+        if (
+            isinstance(cost, (int, float))
+            and not isinstance(cost, bool)
+            and math.isfinite(cost)
+            and cost >= 0
+        ):
+            known_specialist_costs[name] = cost
+
+    specialist_cost_total = sum(known_specialist_costs.values())
 
     prompt = f"""
 You are VoyageAI's travel budgeting expert.
@@ -27,6 +108,16 @@ Trip days: {trip_days}
 Trip nights: {trip_nights}
 Travel style: {data['travel_style']}
 Interests: {", ".join(data.get('interests', []))}
+
+Specialist research estimates (use these to reconcile costs):
+{json.dumps(specialist_estimates, ensure_ascii=False, default=str)}
+
+Known specialist cost total: ₹{specialist_cost_total}
+
+You MUST compare your estimated_actual_cost with these specialist estimates.
+Explain any difference in cost_assumptions.
+Do not silently report a lower total than known specialist costs.
+If a required cost is unknown, state that uncertainty explicitly.
 
 Create a realistic budget allocation for this trip.
 
@@ -86,7 +177,7 @@ FIELD RULES:
 - Do not include markdown, code fences, or explanations outside JSON.
 """
 
-    response = llm.invoke(prompt)
+    response = invoke_gemini(prompt)
     content = response.content
 
     try:
@@ -138,11 +229,13 @@ FIELD RULES:
             raise ValueError("Budget allocation is incomplete.")
 
         # Recalculate arithmetic locally rather than trusting the LLM.
+        
         amounts = [allocation[key] for key in allocation_keys]
 
         if any(
             isinstance(amount, bool)
             or not isinstance(amount, (int, float))
+            or not math.isfinite(amount)
             or amount < 0
             for amount in amounts
         ):
@@ -159,9 +252,20 @@ FIELD RULES:
         if (
             isinstance(estimated_actual_cost, bool)
             or not isinstance(estimated_actual_cost, (int, float))
+            or not math.isfinite(estimated_actual_cost)
             or estimated_actual_cost < 0
         ):
             raise ValueError("Estimated actual cost is invalid.")
+
+        if not math.isclose(
+            allocated_total,
+            total_budget,
+            rel_tol=0,
+            abs_tol=0.01,
+        ):
+            raise ValueError(
+                "Budget allocations must add up to the total trip budget."
+            )
 
         # Trust local arithmetic, not the model's calculated totals.
         result["currency"] = "INR"
@@ -188,8 +292,8 @@ FIELD RULES:
             },
             "allocated_total": 0,
             "remaining_budget": data["budget"],
-            "estimated_actual_cost": 0,
-            "estimated_shortfall": 0,
+            "estimated_actual_cost": None,
+            "estimated_shortfall": None,
             "budget_feasible": False,
             "cost_assumptions": [],
             "saving_suggestions": [],

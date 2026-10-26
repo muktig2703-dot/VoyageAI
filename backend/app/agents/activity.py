@@ -1,9 +1,9 @@
 
 import json
 from datetime import date
-
+import math
 from app.services.weather import get_weather
-from app.services.llm import llm
+from app.services.llm import invoke_gemini
 
 
 def activity_agent(data):
@@ -119,7 +119,7 @@ FIELD RULES:
 - Do not include markdown, code fences, or explanations outside JSON.
 """
 
-    response = llm.invoke(prompt)
+    response = invoke_gemini(prompt)
     content = response.content
 
     try:
@@ -159,6 +159,62 @@ FIELD RULES:
 
         if not required_keys.issubset(plan):
             raise ValueError("Activity response is missing required fields.")
+
+        
+        # Validate and reconcile activity cost totals.
+        daily_total = 0
+
+        for day in plan["days"]:
+            if not isinstance(day, dict):
+                raise ValueError("An activity day has an invalid structure.")
+
+            day_cost = day.get("estimated_daily_cost")
+
+            if (
+                isinstance(day_cost, bool)
+                or not isinstance(day_cost, (int, float))
+                or not math.isfinite(day_cost)
+                or day_cost < 0
+            ):
+                raise ValueError("A daily activity cost is invalid.")
+
+            calculated_day_total = 0
+
+            for period in ("morning", "afternoon", "evening"):
+                activities = day.get(period, [])
+
+                if not isinstance(activities, list):
+                    raise ValueError("An activity period must be a list.")
+
+                for activity in activities:
+                    if not isinstance(activity, dict):
+                        raise ValueError("An activity entry is invalid.")
+
+                    cost = activity.get("estimated_cost")
+
+                    if (
+                        isinstance(cost, bool)
+                        or not isinstance(cost, (int, float))
+                        or not math.isfinite(cost)
+                        or cost < 0
+                    ):
+                        raise ValueError("An activity cost is invalid.")
+
+                    calculated_day_total += cost
+
+            if not math.isclose(
+                day_cost,
+                calculated_day_total,
+                rel_tol=0,
+                abs_tol=0.01,
+            ):
+                raise ValueError(
+                    "Daily activity cost does not match activity entries."
+                )
+
+            daily_total += calculated_day_total
+
+        plan["estimated_total_activity_cost"] = daily_total
 
     except (json.JSONDecodeError, ValueError, TypeError):
         plan = {

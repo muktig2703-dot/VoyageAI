@@ -1,7 +1,40 @@
 
 import json
+import logging
+from app.services.llm import invoke_gemini
 
-from app.services.llm import llm
+logger = logging.getLogger(__name__)
+
+
+def _compact_critic_input(itinerary):
+    """Remove bulky raw data while preserving useful planning details."""
+    if not isinstance(itinerary, dict):
+        return itinerary
+
+    excluded_keys = {
+        "source_weather",
+        "source_events",
+        "raw_response",
+        "raw_data",
+        "raw_html",
+        "debug",
+        "trace",
+    }
+
+    def clean(value):
+        if isinstance(value, dict):
+            return {
+                key: clean(item)
+                for key, item in value.items()
+                if key not in excluded_keys
+            }
+
+        if isinstance(value, list):
+            return [clean(item) for item in value]
+
+        return value
+
+    return clean(itinerary)
 
 
 def critic_agent(itinerary, user_data):
@@ -20,7 +53,7 @@ Travel style: {user_data["travel_style"]}
 Interests: {json.dumps(user_data.get("interests", []), ensure_ascii=False)}
 
 ITINERARY AND AGENT RESEARCH
-{json.dumps(itinerary, ensure_ascii=False, default=str)}
+{json.dumps(_compact_critic_input(itinerary), ensure_ascii=False, default=str)}
 
 VALIDATION CHECKLIST
 
@@ -110,7 +143,12 @@ OUTPUT RULES
 - Do not include markdown, code fences, or text outside JSON.
 """
 
-    response = llm.invoke(prompt)
+    logger.info(
+    "Critic prompt size: %s characters",
+    len(prompt),
+)
+
+    response = invoke_gemini(prompt)
     content = response.content
 
     try:

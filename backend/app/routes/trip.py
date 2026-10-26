@@ -1,5 +1,3 @@
-
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from google.genai.errors import APIError
@@ -10,6 +8,9 @@ from app.schemas.trip import TripCreate
 from app.agents.orchestrator import orchestrate_trip
 from app.dependencies import get_current_user
 from uuid import UUID
+from langchain_google_genai.chat_models import GoogleRateLimitError
+import logging
+from fastapi import APIRouter, Depends, HTTPException
 router = APIRouter(prefix="/trip", tags=["Trip"])
 
 
@@ -22,6 +23,18 @@ def create_trip(
     # Generate the itinerary before attempting persistence.
     try:
         result = orchestrate_trip(data.model_dump())
+
+    except GoogleRateLimitError as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("Gemini rate limit reached: %s", exc)
+
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "The AI service has reached its usage limit. "
+                "Please check your Gemini quota and try again later."
+            ),
+        ) from exc
 
     except APIError as exc:
         # The SDK exposes the HTTP status code directly.
@@ -45,7 +58,6 @@ def create_trip(
 
     except Exception as exc:
     # Log the actual error in the backend terminal.
-        import logging
         logging.exception("Trip generation failed unexpectedly")
 
         raise HTTPException(
