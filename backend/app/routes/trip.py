@@ -133,6 +133,30 @@ def create_trip(
     }
 
 
+@router.get("s")
+def get_my_trips(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    trips = (
+        db.query(Trip)
+        .filter(Trip.user_id == current_user.id)
+        .order_by(Trip.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": str(trip.id),
+            "destination": trip.destination,
+            "start_date": trip.start_date,
+            "end_date": trip.end_date,
+            "budget": trip.budget,
+            "travel_style": trip.travel_style,
+            "status": trip.status,
+        }
+        for trip in trips
+    ]
 
 @router.get("/{trip_id}")
 def get_trip(
@@ -174,3 +198,45 @@ def get_trip(
         "status": trip.status,
         "itinerary": trip.itinerary,
     }
+
+
+@router.delete("/{trip_id}")
+def delete_trip(
+    trip_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        parsed_trip_id = UUID(trip_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    trip = (
+        db.query(Trip)
+        .filter(
+            Trip.id == parsed_trip_id,
+            Trip.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    try:
+        db.delete(trip)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not delete the trip.",
+        ) from exc
+
+    return {"message": "Trip deleted successfully"}

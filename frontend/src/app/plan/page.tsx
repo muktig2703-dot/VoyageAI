@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -150,7 +150,7 @@ function formatDate(value: string) {
   });
 }
 
-export default function PlanPage() {
+function PlanPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
@@ -258,13 +258,14 @@ export default function PlanPage() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            destination: destination.trim(),
-            start_date: startDate,
-            end_date: endDate,
-            budget: Number(budget),
-            travel_style: travelStyle,
-            interests,
-          }),
+  destination: destination.trim(),
+  start_date: startDate,
+  end_date: endDate,
+  budget: Number(budget),
+  travelers,
+  travel_style: travelStyle,
+  interests,
+}),
         }
       );
 
@@ -856,5 +857,19 @@ export default function PlanPage() {
       </div>
       <SupportWidget />
     </main>
+  );
+}
+
+export default function PlanPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#f7f9ff]">
+          <Loader2 className="animate-spin text-[#4f46e5]" size={30} />
+        </main>
+      }
+    >
+      <PlanPageContent />
+    </Suspense>
   );
 }

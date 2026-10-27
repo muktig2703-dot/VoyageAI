@@ -70,12 +70,33 @@ const photos = [
 ];
 
 function labelOf(key: string) {
-  return key
+  const cleaned = key
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .toLowerCase();
+
+const friendlyLabels: Record<string, string> = {
+  accommodation: "Where to Stay",
+  "accommodation details": "Where to Stay",
+  transport: "Getting Around",
+  transportation: "Getting Around",
+  food: "Food & Local Flavours",
+  restaurants: "Food & Local Flavours",
+  activities: "Things to Do",
+  attractions: "Places to Explore",
+  budget: "Budget & Expenses",
+  "cost summary": "Budget Breakdown",
+  "travel tips": "Tips for Your Journey",
+  "packing list": "Packing Essentials",
+  "weather alternatives": "Weather Backup Plans",
+};
+
+  return (
+    friendlyLabels[cleaned] ??
+    cleaned.replace(/\b\w/g, (letter) => letter.toUpperCase())
+  );
 }
 
 function formatDate(value: string) {
@@ -158,6 +179,77 @@ function isBlank(value: unknown): boolean {
   );
 }
 
+function normalizeKey(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+
+
+function getTimeSlot(
+  item: Record<string, unknown>,
+  sourceKey = ""
+): "Morning" | "Afternoon" | "Evening" | null {
+  const text = [
+    sourceKey,
+    ...Object.entries(item)
+      .filter(([key]) =>
+  /time|period|slot|session|schedule|part_of_day/i.test(
+    normalizeKey(key)
+  )
+)
+      .map(([, value]) =>
+        typeof value === "string" ? value : ""
+      ),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  // Prefer explicit time-of-day labels.
+  if (/\b(early morning|morning|breakfast|sunrise)\b/.test(text)) {
+    return "Morning";
+  }
+
+  if (/\b(afternoon|lunch|midday|noon)\b/.test(text)) {
+    return "Afternoon";
+  }
+
+  if (/\b(evening|sunset|dinner|night|nightlife)\b/.test(text)) {
+    return "Evening";
+  }
+
+  // Recognize 12-hour and 24-hour times.
+  const timeMatch = text.match(
+  /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b/
+);
+
+if (!timeMatch) return null;
+
+let hour: number;
+const minute = Number(timeMatch[2] ?? timeMatch[5] ?? 0);
+if (minute >= 60) return null;
+
+if (timeMatch[3]) {
+  hour = Number(timeMatch[1]);
+
+  if (hour < 1 || hour > 12) return null;
+
+  if (timeMatch[3] === "am") {
+    hour = hour === 12 ? 0 : hour;
+  } else {
+    hour = hour === 12 ? 12 : hour + 12;
+  }
+} else {
+  hour = Number(timeMatch[4]);
+}
+
+if (hour < 12) return "Morning";
+if (hour < 17) return "Afternoon";
+return "Evening";
+}
+
 function VisualValue({ value }: { value: unknown }) {
   if (isBlank(value)) return null;
 
@@ -226,6 +318,7 @@ export default function TripDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const tripId = params.id as string;
 
@@ -234,7 +327,7 @@ export default function TripDetailsPage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    if (authLoading || !user || !tripId) return;
+  if (authLoading || !user || !tripId) return;
 
     let cancelled = false;
 
@@ -323,19 +416,38 @@ export default function TripDetailsPage() {
       )
     : [];
 
-  const daysEntry = itinerary
-    ? Object.entries(itinerary).find(([key]) => /^(days|daily_itinerary|day_by_day|itinerary_days)$/i.test(key))
-    : undefined;
+  
+const dayKeyPattern =
+  /^(days|daily_itinerary|day_by_day|itinerary_days|daily_plan|travel_schedule|day_plans|itinerary_by_day)$/;
+
+const daysEntry = itinerary
+  ? Object.entries(itinerary).find(([key, value]) => {
+      const normalizedKey = normalizeKey(key);
+
+      return (
+        dayKeyPattern.test(normalizedKey) &&
+        value !== null &&
+        typeof value === "object" &&
+        Object.keys(value).length > 0
+      );
+    })
+  : undefined;
   const rawDays = daysEntry?.[1];
-  const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
-    ? rawDays.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
-    : rawDays && typeof rawDays === "object"
-      ? Object.entries(rawDays as Record<string, unknown>).map(([key, value]) =>
+  
+const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
+  ? rawDays.map((item, index) =>
+      item && typeof item === "object" && !Array.isArray(item)
+        ? (item as Record<string, unknown>)
+        : { day_label: `Day ${index + 1}`, activities: item }
+    )
+  : rawDays && typeof rawDays === "object"
+    ? Object.entries(rawDays as Record<string, unknown>).map(
+        ([key, value]) =>
           value && typeof value === "object" && !Array.isArray(value)
             ? { day_label: key, ...(value as Record<string, unknown>) }
             : { day_label: key, activities: value }
-        )
-      : [];
+      )
+    : [];
 
   const costEntry = itinerary
     ? Object.entries(itinerary).find(([key]) => /cost_summary|budget_breakdown|budget_summary|expenses/i.test(key))
@@ -354,6 +466,10 @@ export default function TripDetailsPage() {
   const displayTotal = estimatedTotal ?? moneyValue(
     Object.entries(costData).find(([key]) => /total/i.test(key) && !/shortfall/i.test(key))?.[1]
   );
+   const remainingBudget =
+  displayTotal !== null && displayTotal !== undefined
+    ? budgetAmount - displayTotal
+    : null;
   const budgetPercent = displayTotal && budgetAmount > 0
     ? Math.min(100, Math.round((budgetAmount / displayTotal) * 100))
     : 100;
@@ -363,7 +479,10 @@ export default function TripDetailsPage() {
     return result.length > max ? `${result.slice(0, max - 1).trimEnd()}…` : result;
   };
   const field = (item: Record<string, unknown>, pattern: RegExp) =>
-    Object.entries(item).find(([key, value]) => pattern.test(key) && !isBlank(value))?.[1];
+  Object.entries(item).find(
+    ([key, value]) =>
+      pattern.test(normalizeKey(key)) && !isBlank(value)
+  )?.[1];
 
   const start = new Date(`${trip.start_date.slice(0, 10)}T12:00:00`);
   const end = new Date(`${trip.end_date.slice(0, 10)}T12:00:00`);
@@ -518,13 +637,42 @@ export default function TripDetailsPage() {
               </p>
             </div>
           </div>
-          {displayTotal !== null && displayTotal !== undefined && displayTotal > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 flex justify-between text-xs text-slate-500"><span>Budget coverage</span><span>{budgetPercent}%</span></div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-indigo-100"><div className={`h-full rounded-full ${displayTotal > budgetAmount ? "bg-amber-500" : "bg-indigo-600"}`} style={{ width: `${budgetPercent}%` }} /></div>
-              {displayTotal > budgetAmount && <p className="mt-3 text-sm font-medium text-amber-700">You may need ₹{(displayTotal - budgetAmount).toLocaleString("en-IN")} more, or adjust the plan to fit your budget.</p>}
-            </div>
-          )}
+          {displayTotal !== null && displayTotal > 0 && (
+  <div className="mt-4">
+    <div className="mb-2 flex justify-between text-xs text-slate-500">
+      <span>Budget usage</span>
+      <span>
+        {Math.round((displayTotal / Math.max(budgetAmount, 1)) * 100)}%
+      </span>
+    </div>
+
+    <div className="h-2.5 overflow-hidden rounded-full bg-indigo-100">
+      <div
+        className={`h-full rounded-full transition-all ${
+          displayTotal > budgetAmount ? "bg-amber-500" : "bg-indigo-600"
+        }`}
+        style={{
+          width: `${Math.min(
+            100,
+            Math.round((displayTotal / Math.max(budgetAmount, 1)) * 100)
+          )}%`,
+        }}
+      />
+    </div>
+
+    <div
+      className={`mt-3 rounded-xl p-3 text-sm font-semibold ${
+        displayTotal > budgetAmount
+          ? "bg-amber-50 text-amber-800"
+          : "bg-indigo-50 text-indigo-800"
+      }`}
+    >
+      {displayTotal > budgetAmount
+        ? `₹${(displayTotal - budgetAmount).toLocaleString("en-IN")} over budget — consider adjusting your plan.`
+        : `₹${(budgetAmount - displayTotal).toLocaleString("en-IN")} remaining in your budget.`}
+    </div>
+  </div>
+)}
           {Object.keys(costData).length > 0 && (
             <details className="mt-4 rounded-xl border border-indigo-100 p-3">
               <summary className="cursor-pointer text-sm font-semibold text-indigo-800">See cost breakdown</summary>
@@ -539,11 +687,47 @@ export default function TripDetailsPage() {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">YOUR TRAVEL PLAN</p>
             <h2 className="mt-1 text-2xl font-black tracking-tight">The adventure, day by day</h2>
             <p className="mt-1 text-sm text-slate-500">Photos first, only the details you need.</p>
+            {dayItems.length > 1 && (
+  <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+    <button
+      onClick={() => setSelectedDay(null)}
+      className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+        selectedDay === null
+          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
+          : "border border-indigo-100 bg-white text-slate-600 hover:bg-indigo-50"
+      }`}
+    >
+      All days
+    </button>
+
+    {dayItems.map((day, index) => {
+      const date = field(day, /date/i);
+
+      return (
+        <button
+          key={index}
+          onClick={() => setSelectedDay(index)}
+          className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+            selectedDay === index
+              ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
+              : "border border-indigo-100 bg-white text-slate-600 hover:bg-indigo-50"
+          }`}
+        >
+          Day {index + 1}
+          {date ? ` · ${formatDate(String(date)).split(" ").slice(0, 2).join(" ")}` : ""}
+        </button>
+      );
+    })}
+  </div>
+)}
           </div>
 
           {dayItems.length > 0 ? (
             <div className="space-y-5">
-              {dayItems.map((day, index) => {
+              {dayItems
+  .map((day, index) => ({ day, index }))
+  .filter(({ index }) => selectedDay === null || selectedDay === index)
+  .map(({ day, index }) => {
                 const date = field(day, /date/i);
                 const title = field(day, /title|theme|name|day_label/i) ?? `Day ${index + 1}`;
                 const dayActivities = Object.entries(day).filter(([key, value]) =>
@@ -552,6 +736,30 @@ export default function TripDetailsPage() {
                 const fallbackActivities = dayActivities.length ? dayActivities : Object.entries(day).filter(([key, value]) =>
                   !/date|title|theme|name|day_label|meal|weather|daily_cost|notes/i.test(key) && !isBlank(value)
                 );
+                const groupedActivities = [
+  { title: "Morning", icon: "🌅", items: [] as [string, unknown][] },
+  { title: "Afternoon", icon: "☀️", items: [] as [string, unknown][] },
+  { title: "Evening", icon: "🌆", items: [] as [string, unknown][] },
+  { title: "Unscheduled", icon: "📍", items: [] as [string, unknown][] },
+];
+
+fallbackActivities.forEach(([slot, activity]) => {
+  const activityObject =
+    activity && typeof activity === "object" && !Array.isArray(activity)
+      ? activity as Record<string, unknown>
+      : { activity };
+
+  const timeSlot = getTimeSlot(activityObject, slot);
+  const group = groupedActivities.find(
+    (item) => item.title === timeSlot
+  );
+
+  (group ?? groupedActivities[3]).items.push([slot, activity]);
+});
+
+const visibleGroups = groupedActivities.filter(
+  (group) => group.items.length > 0
+);
                 return (
                   <article key={`${String(title)}-${index}`} className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm shadow-indigo-950/[0.03]">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-50 px-5 py-4 sm:px-6">
@@ -561,62 +769,129 @@ export default function TripDetailsPage() {
                       </div>
                       <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">{fallbackActivities.length || 0} planned stops</span>
                     </div>
-                    <div className="grid gap-0 md:grid-cols-2">
-                      {fallbackActivities.map(([slot, activity], activityIndex) => {
-                        const activityObject = activity && typeof activity === "object" && !Array.isArray(activity)
-                          ? activity as Record<string, unknown>
-                          : { activity };
-                        const activityName = field(activityObject, /activity|title|name|description|event/i) ?? activity;
-                        const location = field(activityObject, /location|place|venue/i);
-                        const duration = field(activityObject, /duration|hours/i);
-                        const cost = field(activityObject, /estimated_cost|cost|price|budget/i);
-                        const description = field(activityObject, /notes|description|details|why/i);
-                        const image = /food|meal|lunch|dinner|breakfast/i.test(slot)
-                          ? photos[1].image
-                          : /nature|adventure|park|desert|garden/i.test(`${slot} ${textOf(activityName)}`)
-                            ? photos[2].image
-                            : /culture|heritage|fort|palace|museum|temple|market/i.test(`${slot} ${textOf(activityName)}`)
-                              ? photos[3].image
-                              : photos[0].image;
-                        return (
-                          <div key={`${slot}-${activityIndex}`} className={`flex min-w-0 gap-4 p-4 sm:p-5 ${activityIndex % 2 === 0 ? "md:border-r md:border-indigo-50" : ""} ${activityIndex > 1 ? "border-t border-indigo-50" : ""}`}>
-                            <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-indigo-50 sm:h-32 sm:w-36">
-                              <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
-                              <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold uppercase text-indigo-800">{labelOf(slot)}</span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className="font-bold leading-snug text-slate-900">{compact(activityName, 75)}</h4>
-                              {(typeof location === "string" || typeof location === "number") &&
-  String(location).trim() !== "" && (
-    <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-      <MapPin size={12} className="shrink-0" />
-      {compact(String(location), 55)}
-    </p>
-)}
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {(typeof duration === "string" || typeof duration === "number") &&
-  String(duration).trim() !== "" && (
-    <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
-      {compact(String(duration), 24)}
-    </span>
-  )}
-                                {cost !== undefined && <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">₹{moneyValue(cost)?.toLocaleString("en-IN") ?? compact(cost, 20)}</span>}
-                              </div>
-                                {typeof description === "string" && description.trim() !== "" && (
-  <details className="mt-2">
-    <summary className="cursor-pointer text-xs font-semibold text-indigo-700">
-      More details
-    </summary>
-    <p className="mt-1 text-xs leading-5 text-slate-500">
-      {compact(description, 320)}
-    </p>
-  </details>
-)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    
+<div className="space-y-5 p-4 sm:p-5">
+  {visibleGroups.map((group) => (
+    <section key={group.title}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-lg">{group.icon}</span>
+        <h4 className="text-sm font-bold text-indigo-950">
+          {group.title}
+        </h4>
+        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+          {group.items.length}
+        </span>
+      </div>
+
+      <div className="grid gap-0 md:grid-cols-2">
+        {group.items.map(([slot, activity], activityIndex) => {
+          const activityObject =
+            activity && typeof activity === "object" && !Array.isArray(activity)
+              ? activity as Record<string, unknown>
+              : { activity };
+
+          const activityName =
+  field(activityObject, /activity|title|name|description|event/i) ??
+  (typeof activity === "string" || typeof activity === "number"
+    ? activity
+    : null) ??
+  "Activity details unavailable";
+          const location = field(
+  activityObject,
+  /^(location|place|venue|address|area)$/i
+);
+
+const duration = field(
+  activityObject,
+  /^(duration|estimated_duration|time_required|hours)$/i
+);
+
+const cost = field(
+  activityObject,
+  /^(estimated_cost|activity_cost|cost|price|budget)$/i
+);
+
+const description = field(
+  activityObject,
+  /^(notes|description|details|why|summary)$/i
+);
+          const image = /food|meal|lunch|dinner|breakfast/i.test(slot)
+            ? photos[1].image
+            : /nature|adventure|park|desert|garden/i.test(
+                `${slot} ${textOf(activityName)}`
+              )
+              ? photos[2].image
+              : /culture|heritage|fort|palace|museum|temple|market/i.test(
+                  `${slot} ${textOf(activityName)}`
+                )
+                ? photos[3].image
+                : photos[0].image;
+
+          return (
+            <div
+              key={`${group.title}-${slot}-${activityIndex}`}
+              className={`flex min-w-0 gap-2.5 p-3 sm:gap-4 sm:p-4 ${
+  activityIndex % 2 === 0 ? "md:border-r md:border-indigo-50" : ""
+} ${activityIndex > 1 ? "border-t border-indigo-50" : ""}`}
+            >
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-indigo-50 sm:h-28 sm:w-32">
+                <img
+                  src={image}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h5 className="line-clamp-2 min-w-0 break-words text-sm font-bold leading-5 text-slate-900 [overflow-wrap:anywhere] sm:text-base">
+  {compact(activityName, 75)}
+</h5>
+
+          <p className="mt-1 flex min-w-0 items-start gap-1 text-xs text-slate-500">
+  <MapPin size={12} className="mt-0.5 shrink-0" />
+  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+    {typeof location === "string" || typeof location === "number"
+      ? String(location).trim() || "Location to be confirmed"
+      : "Location to be confirmed"}
+  </span>
+</p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(typeof duration === "string" || typeof duration === "number") &&
+                    String(duration).trim() !== "" && (
+                      <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
+                        {compact(String(duration), 24)}
+                      </span>
+                    )}
+
+                  {cost !== undefined &&
+  cost !== null &&
+  String(cost).trim() !== "" && (
+                    <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">
+                      ₹{moneyValue(cost)?.toLocaleString("en-IN") ?? compact(cost, 20)}
+                    </span>
+                  )}
+                </div>
+
+                {typeof description === "string" && description.trim() !== "" && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-indigo-700">
+                      More details
+                    </summary>
+                    <p className="mt-1 min-w-0 break-words text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">
+  {compact(description, 320)}
+</p>
+                  </details>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  ))}
+</div>
                     {Object.entries(day).some(([key, value]) => /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) && !isBlank(value)) && (
                       <details className="border-t border-indigo-50 px-5 py-3 sm:px-6">
                         <summary className="cursor-pointer text-sm font-semibold text-indigo-700">Meals, weather & day notes</summary>
@@ -627,11 +902,34 @@ export default function TripDetailsPage() {
                 );
               })}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-indigo-100 bg-white p-5 text-sm text-slate-500">
-              A day-by-day itinerary wasn't found in the returned data. You can still open the trip information below.
-            </div>
-          )}
+          
+) : (
+  <div className="overflow-hidden rounded-3xl border border-indigo-100 bg-white p-6 sm:p-9">
+    <div className="mx-auto max-w-lg text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-3xl">
+        🗺️
+      </div>
+
+      <h3 className="mt-5 text-xl font-bold text-slate-900">
+        Your daily adventure is taking shape
+      </h3>
+
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        A day-by-day plan isn't available for this trip yet. Your trip
+        details and any additional information are still available below.
+      </p>
+
+      <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs font-medium text-indigo-800">
+        <span className="rounded-full bg-indigo-50 px-3 py-2">
+          📍 Destination details
+        </span>
+        <span className="rounded-full bg-purple-50 px-3 py-2">
+          🧳 Travel information
+        </span>
+      </div>
+    </div>
+  </div>
+)}
         </section>
 
         {/* Secondary information stays tucked away */}
@@ -645,7 +943,7 @@ export default function TripDetailsPage() {
             {sections.filter(([key]) => !/^(days|daily_itinerary|day_by_day|itinerary_days|cost_summary|budget_breakdown|budget_summary)$/i.test(key)).map(([key, value]) => {
               const Icon = getSectionIcon(key);
               const isOpen = expanded.includes(key);
-              const preview = compact(value, 100);
+              const preview = compact(textOf(value).replace(/[_{}[\]"]/g, " "), 100);
               return (
                 <article key={key} className="overflow-hidden rounded-2xl border border-indigo-100 bg-white">
                   <button onClick={() => setExpanded((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} aria-expanded={isOpen} className="flex w-full items-center gap-3 p-4 text-left sm:p-5">

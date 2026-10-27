@@ -17,10 +17,58 @@ export default function MyJourneysPage() {
   const { user, loading } = useAuth();
   const [savedPackages, setSavedPackages] = useState<SavedPackage[]>([]);
   const [bookmarkedPackages, setBookmarkedPackages] = useState<SavedPackage[]>([]);
-  const [activeTab, setActiveTab] = useState<"favourites" | "saved">("favourites");
+  const [myTrips, setMyTrips] = useState<any[]>([]);
+const [tripsLoading, setTripsLoading] = useState(true);
+const [tripsError, setTripsError] = useState("");
+const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<
+  "favourites" | "saved" | "myTrips"
+>("myTrips");
   const displayedPackages =
   activeTab === "favourites" ? savedPackages : bookmarkedPackages;
+  async function handleDeleteTrip(tripId: string) {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this trip? This cannot be undone."
+  );
 
+  if (!confirmed) return;
+
+  try {
+    setDeletingTripId(tripId);
+
+    const API_URL =
+      process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const token = localStorage.getItem("voyageai_access_token");
+
+    if (!token) {
+      throw new Error("Please log in again to delete this trip.");
+    }
+
+    const response = await fetch(
+      `${API_URL}/trip/${encodeURIComponent(tripId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Could not delete this trip. Please try again.");
+    }
+
+    setMyTrips((previousTrips) =>
+      previousTrips.filter((trip) => trip.id !== tripId)
+    );
+  } catch (error) {
+    window.alert(
+      error instanceof Error ? error.message : "Something went wrong."
+    );
+  } finally {
+    setDeletingTripId(null);
+  }
+}
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
@@ -34,6 +82,59 @@ export default function MyJourneysPage() {
     setSavedPackages(getSavedPackages(userKey));
     setBookmarkedPackages(getBookmarkedPackages(userKey));
   }
+}, [loading, user]);
+
+useEffect(() => {
+  if (loading || !user) return;
+
+  let cancelled = false;
+
+  async function fetchMyTrips() {
+    setTripsLoading(true);
+    setTripsError("");
+
+    try {
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const token = localStorage.getItem("voyageai_access_token");
+
+      if (!token) {
+        throw new Error("Please log in again to view your trips.");
+      }
+
+      const response = await fetch(`${API_URL}/trips`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Could not load trips (${response.status}).`);
+      }
+
+      const data = await response.json();
+
+      if (!cancelled) {
+        setMyTrips(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setTripsError(
+          error instanceof Error ? error.message : "Something went wrong."
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setTripsLoading(false);
+      }
+    }
+  }
+
+  fetchMyTrips();
+
+  return () => {
+    cancelled = true;
+  };
 }, [loading, user]);
 
   if (loading || !user) {
@@ -122,10 +223,83 @@ export default function MyJourneysPage() {
       {bookmarkedPackages.length}
     </span>
   </button>
+  <button
+    onClick={() => setActiveTab("myTrips")}
+    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm transition ${
+      activeTab === "myTrips"
+        ? "border-indigo-200 bg-white text-indigo-800"
+        : "border-indigo-100 bg-white/60 text-slate-500 hover:bg-white"
+    }`}
+  >
+    <Compass size={18} />
+    My Trips
+    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs">
+      {myTrips.length}
+    </span>
+  </button>
 </div>
 
           
-{displayedPackages.length === 0 ? (
+{activeTab === "myTrips" ? (
+  <div className="mt-6">
+    {tripsLoading ? (
+      <p className="py-12 text-center text-indigo-700">
+        Loading your trips...
+      </p>
+    ) : tripsError ? (
+      <p className="rounded-2xl bg-white p-6 text-center text-red-600">
+        {tripsError}
+      </p>
+    ) : myTrips.length === 0 ? (
+      <div className="rounded-3xl border border-indigo-100 bg-white px-6 py-12 text-center">
+        <Compass size={32} className="mx-auto text-indigo-600" />
+        <h2 className="mt-4 text-xl font-bold">No trips yet</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Your saved itineraries will appear here once you create a trip.
+        </p>
+        <button
+          onClick={() => router.push("/plan")}
+          className="mt-5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm font-semibold text-white"
+        >
+          Plan a trip
+        </button>
+      </div>
+    ) : (
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {myTrips.map((trip) => (
+          <article
+            key={trip.id}
+            className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm"
+          >
+            <h2 className="text-xl font-bold text-indigo-950">
+              {trip.destination}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {trip.start_date || "Start date not set"} —{" "}
+              {trip.end_date || "End date not set"}
+            </p>
+            <p className="mt-3 text-sm text-slate-600">
+              Status: {trip.status?.replaceAll("_", " ") || "Planning"}
+            </p>
+            <button
+              onClick={() => router.push(`/trips/${trip.id}`)}
+              className="mt-5 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-sm font-semibold text-white"
+            >
+              View itinerary
+            </button>
+            <button
+  onClick={() => handleDeleteTrip(trip.id)}
+  disabled={deletingTripId === trip.id}
+  className="mt-3 w-full rounded-xl border border-red-200 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {deletingTripId === trip.id ? "Deleting..." : "Delete trip"}
+</button>
+          </article>
+        ))}
+      </div>
+    )}
+  </div>
+) : displayedPackages.length === 0 ? (
   <div className="mt-6 rounded-3xl border border-indigo-100 bg-white px-6 py-12 text-center shadow-sm sm:px-10 sm:py-16">
     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700">
       <Heart size={30} />

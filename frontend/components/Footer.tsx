@@ -59,24 +59,24 @@ export default function Footer() {
 
             <ul className="mt-5 space-y-3 text-slate-400">
               {[
-                "How it Works",
-                "AI Agents",
-                "Interactive Preview",
-                "Trip Planner",
-              ].map((item) => (
-                <li key={item}>
-                  <a
-                    href="#"
-                    className="group flex items-center gap-2 transition hover:text-white"
-                  >
-                    {item}
-                    <ArrowUpRight
-                      size={14}
-                      className="opacity-0 transition group-hover:opacity-100"
-                    />
-                  </a>
-                </li>
-              ))}
+  { label: "How it Works", href: "/#how-it-works" },
+  { label: "AI Agents", href: "/#ai-team" },
+  { label: "Interactive Preview", href: "/#preview" },
+  { label: "Trip Planner", href: "/plan" },
+].map((item) => (
+  <li key={item.label}>
+    <a
+      href={item.href}
+      className="group flex items-center gap-2 transition hover:text-white"
+    >
+      {item.label}
+      <ArrowUpRight
+        size={14}
+        className="opacity-0 transition group-hover:opacity-100"
+      />
+    </a>
+  </li>
+))}
             </ul>
           </div>
 
@@ -84,26 +84,26 @@ export default function Footer() {
           <div>
             <h4 className="text-lg font-semibold">Resources</h4>
 
-            <ul className="mt-5 space-y-3 text-slate-400">
-              {[
-                "Documentation",
-                "GitHub",
-                "Roadmap",
-                "FAQs",
-              ].map((item) => (
-                <li key={item}>
-                  <a
-                    href="#"
-                    className="group flex items-center gap-2 transition hover:text-white"
-                  >
-                    {item}
-                    <ArrowUpRight
-                      size={14}
-                      className="opacity-0 transition group-hover:opacity-100"
-                    />
-                  </a>
-                </li>
-              ))}
+            <ul className="mt-5 space-y-3 text-slate-400">           
+{[
+  { label: "Documentation", href: "/documentation" },
+  { label: "GitHub", href: "https://github.com/muktig2703-dot/VoyageAI" },
+  { label: "Roadmap", href: "/roadmap" },
+  { label: "FAQs", href: "/faqs" },
+].map((item) => (
+  <li key={item.label}>
+    <a
+      href={item.href}
+      className="group flex items-center gap-2 transition hover:text-white"
+    >
+      {item.label}
+      <ArrowUpRight
+        size={14}
+        className="opacity-0 transition group-hover:opacity-100"
+      />
+    </a>
+  </li>
+))}
             </ul>
           </div>
 
@@ -116,19 +116,37 @@ export default function Footer() {
               a real AI travel platform.
             </p>
 
-            <div className="mt-6 flex gap-3">
-              {[
-  { icon: GitBranch, label: "GitHub" },
-  { icon: Link, label: "LinkedIn" },
-  { icon: Mail, label: "Email" },
-].map(({ icon: Icon, label }) => (
-                <button
-                  key={label}
-                  className="rounded-xl border border-white/10 bg-white/5 p-3 transition hover:border-blue-400 hover:bg-blue-500/10"
-                >
-                  <Icon size={20} />
-                </button>
-              ))}
+            <div className="mt-6 flex gap-3">             
+{[
+  {
+    icon: GitBranch,
+    label: "GitHub",
+    href: "https://github.com/muktig2703-dot/VoyageAI",
+  },
+  {
+  icon: Link,
+  label: "LinkedIn",
+  href: "https://www.linkedin.com/in/mukti-gupta-451874326",
+},
+  {
+  icon: Mail,
+  label: "Email",
+  href: "mailto:YOUR_EMAIL_ADDRESS",
+},
+].map(({ icon: Icon, label, href }) => (
+  <a
+    key={label}
+    href={href || undefined}
+    onClick={!href ? (event) => event.preventDefault() : undefined}
+    target={href ? "_blank" : undefined}
+    rel={href ? "noopener noreferrer" : undefined}
+    aria-label={label}
+    title={label}
+    className="rounded-xl border border-white/10 bg-white/5 p-3 transition hover:border-blue-400 hover:bg-blue-500/10"
+  >
+    <Icon size={20} />
+  </a>
+))}
             </div>
           </div>
         </div>
