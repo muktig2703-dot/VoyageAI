@@ -112,6 +112,16 @@ FIELD RULES:
 - Each activity cost must be a numeric estimate without currency symbols.
 - estimated_daily_cost is the sum of the activity costs for that day.
 - estimated_total_activity_cost is the sum of all daily activity costs.
+- Activity names should be short and descriptive, ideally 3–8 words.
+- Each activity's reason must be one concise sentence of 10–15 words maximum.
+- Describe only the planned experience; avoid historical essays and generic explanations.
+- Keep weather_alternative to one short sentence.
+- Keep budget_notes to two short sentences maximum.
+- Prefer 2–3 meaningful activities per day, adjusted for travel time and trip length.
+- Keep arrival and departure days light.
+- Do not add separate meal suggestions or long travel advice to activity descriptions.
+- Use practical, specific information instead of repetitive filler.
+
 - Use 0 for genuinely free activities.
 - Include sensible activities for arrival and departure days.
 - Do not force a full schedule onto a day when travel may take up most of it.

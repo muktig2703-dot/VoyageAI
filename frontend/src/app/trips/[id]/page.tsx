@@ -140,6 +140,14 @@ function getSummary(itinerary: Record<string, unknown> | null) {
   return entry ? textOf(entry[1]) : "";
 }
 
+function cleanSummary(value: string) {
+  return value
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\b(search_score|source_url|raw_content|metadata)\s*[:=][^\n,]*/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function getSectionIcon(key: string) {
   const value = key.toLowerCase();
 
@@ -404,8 +412,15 @@ export default function TripDetailsPage() {
     );
   }
 
-  const itinerary = trip.itinerary;
-  const summary = getSummary(itinerary);
+  const itinerary =
+  trip.itinerary &&
+  typeof trip.itinerary === "object" &&
+  "itinerary" in trip.itinerary &&
+  trip.itinerary.itinerary &&
+  typeof trip.itinerary.itinerary === "object"
+    ? trip.itinerary.itinerary as Record<string, unknown>
+    : trip.itinerary as Record<string, unknown> | null;
+  const summary = cleanSummary(getSummary(itinerary));
   const highlights = getHighlights(trip.interests || []);
 
   const sections = itinerary
@@ -448,6 +463,10 @@ const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
             : { day_label: key, activities: value }
       )
     : [];
+    console.log("Itinerary data:", JSON.stringify(itinerary, null, 2));
+console.log("Matched days entry:", daysEntry);
+console.log("Raw days:", rawDays);
+console.log("Parsed day count:", dayItems.length);
 
   const costEntry = itinerary
     ? Object.entries(itinerary).find(([key]) => /cost_summary|budget_breakdown|budget_summary|expenses/i.test(key))
@@ -548,6 +567,28 @@ const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
             </div>
           </div>
         </section>
+
+        {/* AI-generated travel overview */}
+{summary && (
+  <section className="mt-6 rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm sm:p-8">
+    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-700">
+      <Sparkles size={15} />
+      Your AI travel overview
+    </div>
+
+    <h2 className="mt-3 text-2xl font-black tracking-tight text-indigo-950">
+      Your {trip.destination} travel overview
+    </h2>
+
+    <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">
+      {summary}
+    </p>
+
+    <p className="mt-5 text-xs leading-5 text-slate-400">
+      Travel details, prices, and opening times are estimates. Verify them before booking.
+    </p>
+  </section>
+)}
 
         {/* Compact overview */}
         <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -673,6 +714,7 @@ const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
     </div>
   </div>
 )}
+          
           {Object.keys(costData).length > 0 && (
             <details className="mt-4 rounded-xl border border-indigo-100 p-3">
               <summary className="cursor-pointer text-sm font-semibold text-indigo-800">See cost breakdown</summary>
@@ -743,13 +785,28 @@ const dayItems: Record<string, unknown>[] = Array.isArray(rawDays)
   { title: "Unscheduled", icon: "📍", items: [] as [string, unknown][] },
 ];
 
+
+
 fallbackActivities.forEach(([slot, activity]) => {
   const activityObject =
     activity && typeof activity === "object" && !Array.isArray(activity)
-      ? activity as Record<string, unknown>
+      ? (activity as Record<string, unknown>)
       : { activity };
 
-  const timeSlot = getTimeSlot(activityObject, slot);
+  const normalizedSlot = normalizeKey(slot);
+
+  let timeSlot: "Morning" | "Afternoon" | "Evening" | null = null;
+
+  if (normalizedSlot.includes("morning")) {
+    timeSlot = "Morning";
+  } else if (normalizedSlot.includes("afternoon")) {
+    timeSlot = "Afternoon";
+  } else if (normalizedSlot.includes("evening")) {
+    timeSlot = "Evening";
+  } else {
+    timeSlot = getTimeSlot(activityObject, slot);
+  }
+
   const group = groupedActivities.find(
     (item) => item.title === timeSlot
   );
@@ -830,10 +887,11 @@ const description = field(
           return (
             <div
               key={`${group.title}-${slot}-${activityIndex}`}
-              className={`flex min-w-0 gap-2.5 p-3 sm:gap-4 sm:p-4 ${
+              className={`relative flex min-w-0 gap-2.5 p-3 sm:gap-4 sm:p-4 ${
   activityIndex % 2 === 0 ? "md:border-r md:border-indigo-50" : ""
 } ${activityIndex > 1 ? "border-t border-indigo-50" : ""}`}
             >
+              <div className="absolute left-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-indigo-500 bg-white" />
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-indigo-50 sm:h-28 sm:w-32">
                 <img
                   src={image}
@@ -895,7 +953,52 @@ const description = field(
                     {Object.entries(day).some(([key, value]) => /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) && !isBlank(value)) && (
                       <details className="border-t border-indigo-50 px-5 py-3 sm:px-6">
                         <summary className="cursor-pointer text-sm font-semibold text-indigo-700">Meals, weather & day notes</summary>
-                        <div className="mt-3"><VisualValue value={Object.fromEntries(Object.entries(day).filter(([key, value]) => /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) && !isBlank(value)))} /></div>
+                        <div className="mt-3 space-y-4">
+  {Object.entries(day)
+    .filter(([key, value]) =>
+      /meal_suggestions|weather_alternative|daily_cost|notes/i.test(key) &&
+      !isBlank(value)
+    )
+    .map(([key, value]) => (
+      <div key={key} className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+        <h4 className="mb-3 font-semibold text-indigo-700">
+          {key.toLowerCase().includes("meal") ? "🍽️ Meal Suggestions" :
+           key.toLowerCase().includes("weather") ? "🌦️ Weather Alternatives" :
+           key.toLowerCase().includes("cost") ? "💰 Daily Budget" : "📝 Notes"}
+        </h4>
+        {key.toLowerCase().includes("meal") ? (
+  <div className="grid gap-3 sm:grid-cols-3">
+    {[
+      { name: "Breakfast", icon: "🍳", color: "bg-amber-50" },
+      { name: "Lunch", icon: "🍱", color: "bg-emerald-50" },
+      { name: "Dinner", icon: "🍽️", color: "bg-violet-50" },
+    ].map((meal) => {
+      const meals = value as Record<string, unknown>;
+      const mealValue = Object.entries(meals).find(([mealKey]) =>
+        mealKey.toLowerCase().includes(meal.name.toLowerCase())
+      )?.[1];
+
+      return (
+        <div key={meal.name} className={`rounded-xl ${meal.color} p-3`}>
+          <div className="mb-2 text-xl">{meal.icon}</div>
+          <p className="mb-1 text-sm font-bold text-slate-700">
+            {meal.name}
+          </p>
+          {mealValue ? (
+            <VisualValue value={mealValue} />
+          ) : (
+            <p className="text-xs text-slate-400">No suggestion available</p>
+          )}
+        </div>
+      );
+    })}
+  </div>
+) : (
+  <VisualValue value={value} />
+)}
+      </div>
+    ))}
+</div>
                       </details>
                     )}
                   </article>
@@ -940,7 +1043,16 @@ const description = field(
             <p className="mt-1 text-sm text-slate-500">Transport, accommodation, food tips and agent notes, when available.</p>
           </div>
           <div className="space-y-3">
-            {sections.filter(([key]) => !/^(days|daily_itinerary|day_by_day|itinerary_days|cost_summary|budget_breakdown|budget_summary)$/i.test(key)).map(([key, value]) => {
+            {sections
+  .filter(([key]) => {
+    const normalizedKey = normalizeKey(key);
+
+    return (
+      !/^(days|daily_itinerary|day_by_day|itinerary_days|day_plans|daily_plan|travel_schedule|itinerary_by_day|cost_summary|budget_breakdown|budget_summary)$/.test(normalizedKey) &&
+      !/^(review|progress|agent_results|agent_progress|agent_review|review_results|progress_updates)$/.test(normalizedKey)
+    );
+  })
+  .map(([key, value]) => {
               const Icon = getSectionIcon(key);
               const isOpen = expanded.includes(key);
               const preview = compact(textOf(value).replace(/[_{}[\]"]/g, " "), 100);

@@ -7,7 +7,7 @@ from app.services.llm import invoke_gemini
 
 
 def destination_agent(data):
-    city = data["destination"]
+    city = data["destination"].strip()
     start_date = str(data["start_date"])
     end_date = str(data["end_date"])
     budget = data["budget"]

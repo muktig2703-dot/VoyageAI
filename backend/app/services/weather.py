@@ -25,6 +25,12 @@ def get_weather(city):
         timeout=15,
     )
 
+    if response.status_code == 404:
+       return {
+        "temperature": None,
+        "condition": "Weather unavailable for this destination",
+    }
+
     response.raise_for_status()
     data = response.json()
 

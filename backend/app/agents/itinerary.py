@@ -269,10 +269,22 @@ OUTPUT RULES
 - budget_feasible must reflect whether the estimated total fits the budget.
 - Do not silently change the user's budget or travel dates.
 - Use empty lists when there are no supported recommendations.
-- Keep all descriptions concise: generally one short sentence per field.
-- Activity notes and practical notes must be brief and actionable.
-- Avoid repeating information already present elsewhere in the itinerary.
-- Include only useful, destination-specific recommendations.
+
+- Keep the trip_summary to 2–3 short sentences maximum.
+- Each activity description must be one short sentence, ideally under 15 words.
+- Each activity note must be one short actionable tip, ideally under 10 words.
+- Keep day titles short, ideally 3–6 words.
+- Keep arrival_and_transport to 2–3 concise sentences.
+- Keep accommodation notes to 2 short sentences maximum.
+- Keep food_summary to 2 short sentences maximum.
+- Keep cost_summary notes concise and focused on budget risks.
+- Keep practical_notes and assumptions to only essential bullet-style items.
+- Meal suggestions must be short phrases, not paragraphs.
+- Weather alternatives must be one short sentence describing a practical backup.
+- Do not repeat an activity description in its notes or meal suggestions.
+- Do not explain why an attraction is famous or provide general travel essays.
+- Prioritize actionable information: what to do, where to go, duration, and estimated cost.
+- Preserve the existing JSON structure and every required field.
 - Keep the required JSON structure and all required fields unchanged.
 - Do not include markdown or explanations outside the JSON.
 """
